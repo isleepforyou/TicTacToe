@@ -76,9 +76,6 @@ public class BoardEvaluator {
             if (opponentCount == 2 && emptyCount == 1) score -= 7;
         }
 
-        // Colonnes et diagonales similaires...
-        // (code abrégé pour clarté)
-
         return score;
     }
 

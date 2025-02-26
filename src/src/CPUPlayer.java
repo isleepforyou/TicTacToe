@@ -13,7 +13,7 @@ public class CPUPlayer {
     private int maxDepthReached;
 
     // Constantes de temps
-    private static final long MAX_MOVE_TIME = 2950; // 2.95 secondes max pour un coup
+    private static final long MAX_MOVE_TIME = 2850; // 2.95 secondes max pour un coup
 
     public CPUPlayer(Mark cpu) {
         this.cpuMark = cpu;
