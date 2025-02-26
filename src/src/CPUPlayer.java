@@ -6,12 +6,14 @@ public class CPUPlayer {
     private Mark cpuMark;
     private Mark opponentMark;
     private SearchEngine searchEngine;
-    private Pondering pondering;
     private ExecutorService executorService;
 
     // Compteur de nœuds explorés
     private AtomicInteger numExploredNodes;
     private int maxDepthReached;
+
+    // Constantes de temps
+    private static final long MAX_MOVE_TIME = 2950; // 2.95 secondes max pour un coup
 
     public CPUPlayer(Mark cpu) {
         this.cpuMark = cpu;
@@ -37,16 +39,6 @@ public class CPUPlayer {
                 executorService,
                 numExploredNodes
         );
-
-        // Initialiser le pondering
-        this.pondering = new Pondering(
-                cpuMark,
-                opponentMark,
-                transpositionTable,
-                evaluator,
-                moveOrderer,
-                executorService
-        );
     }
 
     public int getNumOfExploredNodes() {
@@ -62,47 +54,29 @@ public class CPUPlayer {
     }
 
     public ArrayList<Move> getNextMoveAB(Board board) {
-        // Arrêter le pondering si en cours
-        pondering.stopPondering();
-
         // Réinitialiser le compteur
         numExploredNodes.set(0);
 
-        // Vérifier si nous avons des résultats de pondering pour ce plateau
-        PonderingResult ponderResult = pondering.getResultForBoard(board);
+        long startTime = System.currentTimeMillis();
 
-        // Résultats de recherche
-        SearchResult result;
-
-        if (ponderResult != null) {
-            System.out.println("Utilisation des résultats de pondering! Profondeur pré-calculée: " +
-                    ponderResult.getDepth());
-
-            // Continuer la recherche à partir de la profondeur suivante
-            result = searchEngine.searchFromDepth(board, ponderResult.getDepth() + 1, ponderResult);
-        } else {
-            // Aucun résultat de pondering, démarrer une recherche normale
-            result = searchEngine.search(board);
-        }
+        // Lancer la recherche
+        SearchResult result = searchEngine.search(board);
 
         // Mettre à jour les statistiques
         this.maxDepthReached = result.getMaxDepthReached();
 
-        // Nettoyer les résultats de pondering obsolètes
-        pondering.clearResults();
+        long endTime = System.currentTimeMillis();
+        System.out.println("Temps de calcul total: " + (endTime - startTime) + " ms");
 
-        // Démarrer le pondering pour le prochain tour
-        ArrayList<Move> bestMoves = result.getBestMoves();
-        if (!bestMoves.isEmpty()) {
-            pondering.startPondering(board, bestMoves.get(0));
-        }
+        return result.getBestMoves();
+    }
 
-        return bestMoves;
+    // Pour compatibilité avec le client existant, mais ne fait rien maintenant
+    public void stopPondering() {
+        // Ne fait rien - le pondering a été supprimé
     }
 
     public void shutdown() {
-        pondering.stopPondering();
-
         executorService.shutdown();
         try {
             if (!executorService.awaitTermination(3, TimeUnit.SECONDS)) {

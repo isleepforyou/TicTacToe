@@ -6,10 +6,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class SearchEngine {
     private static final int INF = 1000;
-    private static final int INITIAL_DEPTH = 4;
-    private static final int MAX_DEPTH = 12;
-    private static final long MIN_SEARCH_TIME = 1500; // 1.5 secondes
-    private static final long MAX_SEARCH_TIME = 2800; // 2.8 secondes
+    private static final int INITIAL_DEPTH = 3;     // Commencer à une profondeur plus faible
+    private static final int MAX_DEPTH = 20;        // Profondeur maximale théorique plus élevée
+    private static final long MAX_SEARCH_TIME = 2950; // 2.95 secondes (pour laisser une marge)
 
     private Mark cpuMark;
     private Mark opponentMark;
@@ -44,7 +43,7 @@ public class SearchEngine {
     }
 
     // Recherche à partir d'une profondeur spécifique
-    public SearchResult searchFromDepth(Board board, int startDepth, PonderingResult ponderResult) {
+    public SearchResult searchFromDepth(Board board, int startDepth, Object unusedParam) {
         // Initialisation
         startTime = System.currentTimeMillis();
         timeUp = new AtomicBoolean(false);
@@ -53,15 +52,9 @@ public class SearchEngine {
         int bestScore = -INF;
         int maxDepthReached = 0;
 
-        // Utiliser les résultats du pondering si disponibles
-        if (ponderResult != null) {
-            bestMoves = new ArrayList<>(ponderResult.getBestMoves());
-            bestScore = ponderResult.getBestScore();
-            maxDepthReached = ponderResult.getDepth();
-        }
-
         // Recherche itérative
         for (int depth = startDepth; depth <= MAX_DEPTH; depth++) {
+            // Vérifier si nous avons encore du temps
             if (timeUp.get()) break;
 
             SearchResult depthResult = searchAtDepth(board, depth);
@@ -74,22 +67,34 @@ public class SearchEngine {
 
                 // Si on a trouvé un coup gagnant, arrêter la recherche
                 if (bestScore >= 90) {
+                    System.out.println("Coup gagnant trouvé à la profondeur " + depth);
                     break;
                 }
 
-                // Vérifier si on a assez de temps pour continuer
+                // Estimer si nous avons le temps pour une itération supplémentaire
                 long elapsedTime = System.currentTimeMillis() - startTime;
-                if (elapsedTime >= MAX_SEARCH_TIME) {
-                    break;
+                long remainingTime = MAX_SEARCH_TIME - elapsedTime;
+
+                // Estimer le temps nécessaire pour la prochaine itération
+                long estimatedNextTime;
+                if (depth <= 5) {
+                    estimatedNextTime = (long)(elapsedTime * 3.0);
+                } else if (depth <= 8) {
+                    estimatedNextTime = (long)(elapsedTime * 2.5);
+                } else {
+                    estimatedNextTime = (long)(elapsedTime * 2.0);
                 }
 
-                // Estimation pour la prochaine profondeur
-                if (depth >= 8 && elapsedTime >= MIN_SEARCH_TIME) {
-                    long estimatedNextTime = (long)(elapsedTime * 3.5);
-                    if (estimatedNextTime + startTime > startTime + MAX_SEARCH_TIME) {
-                        break;
-                    }
+                System.out.println("Profondeur " + depth + " terminée en " + elapsedTime +
+                        " ms, estimation pour profondeur suivante: " + estimatedNextTime +
+                        " ms, temps restant: " + remainingTime + " ms");
+
+                if (estimatedNextTime > remainingTime) {
+                    System.out.println("Arrêt de la recherche - temps insuffisant pour la profondeur suivante");
+                    break;
                 }
+            } else {
+                System.out.println("Temps écoulé pendant la recherche à la profondeur " + depth);
             }
         }
 
@@ -113,6 +118,13 @@ public class SearchEngine {
         // Trier les coups
         moveOrderer.sortMoves(moves, board, cpuMark);
 
+        // Limiter le nombre de coups à considérer pour les grandes profondeurs
+        if (depth > 8 && moves.size() > 10) {
+            moves = new ArrayList<>(moves.subList(0, 10));
+        } else if (depth > 6 && moves.size() > 15) {
+            moves = new ArrayList<>(moves.subList(0, 15));
+        }
+
         // Recherche parallèle
         try {
             currentDepthScore = searchMovesParallel(board, moves, depth, currentDepthMoves);
@@ -131,10 +143,14 @@ public class SearchEngine {
         int bestValue = -INF;
         List<Future<MoveScore>> futures = new ArrayList<>();
 
+        // Calculer le timeout pour cette profondeur
+        long elapsedTime = System.currentTimeMillis() - startTime;
+        long timeoutMs = MAX_SEARCH_TIME - elapsedTime;
+
         // Lancer les recherches en parallèle
         for (Move move : moves) {
             futures.add(executorService.submit(() -> {
-                if (timeUp.get()) {
+                if (isTimeUp()) {
                     return new MoveScore(move, -INF);
                 }
 
@@ -142,8 +158,8 @@ public class SearchEngine {
                 newBoard.play(move, cpuMark);
                 int score = alphaBeta(newBoard, false, -INF, INF, depth - 1, 1);
 
-                if (System.currentTimeMillis() - startTime > MAX_SEARCH_TIME) {
-                    timeUp.set(true);
+                if (isTimeUp()) {
+                    return new MoveScore(move, -INF);
                 }
 
                 return new MoveScore(move, score);
@@ -154,11 +170,11 @@ public class SearchEngine {
         List<MoveScore> scores = new ArrayList<>();
         for (Future<MoveScore> future : futures) {
             try {
-                MoveScore result = future.get(MAX_SEARCH_TIME - (System.currentTimeMillis() - startTime),
-                        TimeUnit.MILLISECONDS);
+                MoveScore result = future.get(timeoutMs, TimeUnit.MILLISECONDS);
                 scores.add(result);
             } catch (TimeoutException e) {
                 timeUp.set(true);
+                System.out.println("Timeout lors de la collecte des résultats");
                 break;
             }
         }
@@ -178,11 +194,22 @@ public class SearchEngine {
         return bestValue;
     }
 
+    // Méthode pour vérifier si le temps est écoulé
+    private boolean isTimeUp() {
+        if (timeUp.get()) return true;
+
+        if (System.currentTimeMillis() - startTime > MAX_SEARCH_TIME) {
+            timeUp.set(true);
+            return true;
+        }
+
+        return false;
+    }
+
     // Algorithme Alpha-Beta principal
     private int alphaBeta(Board board, boolean isMaximizing, int alpha, int beta, int depth, int ply) {
-        // Vérifier le temps
-        if (timeUp.get() || System.currentTimeMillis() - startTime > MAX_SEARCH_TIME) {
-            timeUp.set(true);
+        // Vérifier régulièrement le temps
+        if (ply % 3 == 0 && isTimeUp()) {
             return 0;
         }
 
@@ -216,10 +243,15 @@ public class SearchEngine {
             moveOrderer.sortMoves(moves, board, isMaximizing ? cpuMark : opponentMark);
         }
 
+        // Limiter le nombre de coups à explorer pour les nœuds moins importants
+        if (depth <= 3 && moves.size() > 12 && ply > 2) {
+            moves = new ArrayList<>(moves.subList(0, 12));
+        }
+
         if (isMaximizing) {
             int best = -INF;
             for (Move move : moves) {
-                if (timeUp.get()) break;
+                if (ply % 3 == 0 && isTimeUp()) break;
 
                 Board newBoard = board.copy();
                 newBoard.play(move, cpuMark);
@@ -233,7 +265,7 @@ public class SearchEngine {
         } else {
             int best = INF;
             for (Move move : moves) {
-                if (timeUp.get()) break;
+                if (ply % 3 == 0 && isTimeUp()) break;
 
                 Board newBoard = board.copy();
                 newBoard.play(move, opponentMark);

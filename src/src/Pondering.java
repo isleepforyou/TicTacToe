@@ -17,8 +17,11 @@ public class Pondering {
     private AtomicBoolean isPondering;
     private Map<String, PonderingResult> ponderingResults;
 
-    // Profondeur maximale pour le pondering
-    private static final int MAX_PONDERING_DEPTH = 7;
+    // Variables pour contrôler le temps de pondering
+    private static final int MAX_PONDERING_DEPTH = 7; // Revenu à 7 pour une analyse plus profonde
+    private static final long MAX_PONDERING_TIME = 2800; // 2.8 secondes max
+    private static final int TOP_MOVES_TO_CONSIDER = 4; // Nombre de coups adverses à considérer augmenté
+    private long startTime;
 
     public Pondering(Mark cpuMark, Mark opponentMark,
                      TranspositionTable transpositionTable,
@@ -38,91 +41,117 @@ public class Pondering {
 
     // Démarrer le pondering
     public void startPondering(Board originalBoard, Move ourMove) {
+        // Stopper tout pondering en cours
+        stopPondering();
+
         // Créer une copie du plateau avec notre coup joué
         Board afterOurMove = originalBoard.copy();
         afterOurMove.play(ourMove, cpuMark);
 
-        // Trouver le meilleur coup probable de l'adversaire
+        // Trouver les meilleurs coups probables de l'adversaire
         ArrayList<Move> opponentMoves = afterOurMove.getAvailableMoves();
         if (opponentMoves.isEmpty()) return;
 
-        // Prendre le coup le plus probable de l'adversaire
-        moveOrderer.sortMoves(opponentMoves, afterOurMove, opponentMark);
-        Move predictedOpponentMove = opponentMoves.get(0);
-
-        // Plateau après le coup probable de l'adversaire
-        ponderingBoard = afterOurMove.copy();
-        ponderingBoard.play(predictedOpponentMove, opponentMark);
-
-        // Lancer le pondering
+        // Préparer le pondering
         isPondering.set(true);
-        ponderingFuture = executorService.submit(() -> doPondering());
+        startTime = System.currentTimeMillis();
+
+        // Trier les coups de l'adversaire
+        moveOrderer.sortMoves(opponentMoves, afterOurMove, opponentMark);
+
+        // Limiter au nombre de coups à considérer
+        int movesToConsider = Math.min(TOP_MOVES_TO_CONSIDER, opponentMoves.size());
+        final ArrayList<Move> topOpponentMoves = new ArrayList<>(
+                opponentMoves.subList(0, movesToConsider)
+        );
+
+        // Lancer le pondering en arrière-plan
+        ponderingFuture = executorService.submit(() -> doPondering(afterOurMove, topOpponentMoves));
     }
 
     // Processus de pondering en arrière-plan
-    private void doPondering() {
+    private void doPondering(Board afterOurMove, ArrayList<Move> topOpponentMoves) {
         try {
-            ArrayList<Move> ponderBestMoves = new ArrayList<>();
-            int ponderBestScore = -1000; // -INF
-            int ponderMaxDepth = 0;
+            System.out.println("Démarrage du pondering pour " + topOpponentMoves.size() + " coups adverses possibles...");
 
-            System.out.println("Démarrage du pondering...");
+            // Pour chaque coup probable de l'adversaire
+            for (Move opponentMove : topOpponentMoves) {
+                if (!isPondering.get() || timeIsRunningOut()) break;
 
-            // Recherche pendant le temps de l'adversaire
-            for (int depth = 3; depth <= MAX_PONDERING_DEPTH; depth++) {
-                if (!isPondering.get()) break;
+                // Créer le plateau après ce coup
+                Board afterOpponentMove = afterOurMove.copy();
+                afterOpponentMove.play(opponentMove, opponentMark);
 
-                ArrayList<Move> currentMoves = new ArrayList<>();
-                int currentScore = -1000;
+                // Stocker le plateau pour référence
+                ponderingBoard = afterOpponentMove;
 
-                ArrayList<Move> moves = ponderingBoard.getAvailableMoves();
-                if (moves.isEmpty()) break;
+                // Effectuer une recherche progressive itérative
+                ArrayList<Move> ponderBestMoves = new ArrayList<>();
+                int ponderBestScore = -1000; // -INF
+                int ponderMaxDepth = 0;
 
-                moveOrderer.sortMoves(moves, ponderingBoard, cpuMark);
+                // Recherche pendant le temps disponible
+                for (int depth = 3; depth <= MAX_PONDERING_DEPTH; depth++) {
+                    if (!isPondering.get() || timeIsRunningOut()) break;
 
-                // Recherche simplifiée
-                for (Move move : moves) {
-                    if (!isPondering.get()) break;
+                    ArrayList<Move> currentMoves = new ArrayList<>();
+                    int currentScore = -1000;
 
-                    Board newBoard = ponderingBoard.copy();
-                    newBoard.play(move, cpuMark);
+                    ArrayList<Move> moves = ponderingBoard.getAvailableMoves();
+                    if (moves.isEmpty()) break;
 
-                    // Utiliser une profondeur réduite pour le pondering
-                    int score = alphaBeta(newBoard, false, -1000, 1000, depth - 1);
+                    moveOrderer.sortMoves(moves, ponderingBoard, cpuMark);
 
-                    if (score > currentScore) {
-                        currentScore = score;
-                        currentMoves.clear();
-                        currentMoves.add(move);
-                    } else if (score == currentScore) {
-                        currentMoves.add(move);
+                    // Recherche pour ce coup adversaire
+                    for (Move move : moves) {
+                        if (!isPondering.get() || timeIsRunningOut()) break;
+
+                        Board newBoard = ponderingBoard.copy();
+                        newBoard.play(move, cpuMark);
+
+                        // Recherche alpha-beta avec timeout vérifié fréquemment
+                        int score = alphaBeta(newBoard, false, -1000, 1000, depth - 1);
+
+                        if (score > currentScore) {
+                            currentScore = score;
+                            currentMoves.clear();
+                            currentMoves.add(move);
+                        } else if (score == currentScore) {
+                            currentMoves.add(move);
+                        }
                     }
-                }
 
-                if (isPondering.get()) {
-                    ponderBestMoves = new ArrayList<>(currentMoves);
-                    ponderBestScore = currentScore;
-                    ponderMaxDepth = depth;
+                    if (isPondering.get() && !timeIsRunningOut()) {
+                        ponderBestMoves = new ArrayList<>(currentMoves);
+                        ponderBestScore = currentScore;
+                        ponderMaxDepth = depth;
 
-                    // Sauvegarder les résultats
-                    String boardKey = boardToString(ponderingBoard);
-                    ponderingResults.put(boardKey, new PonderingResult(
-                            ponderBestMoves, ponderBestScore, ponderMaxDepth
-                    ));
+                        // Sauvegarder les résultats
+                        String boardKey = boardToString(ponderingBoard);
+                        ponderingResults.put(boardKey, new PonderingResult(
+                                ponderBestMoves, ponderBestScore, ponderMaxDepth
+                        ));
 
-                    System.out.println("Pondering: profondeur " + depth + " complétée");
+                        System.out.println("Pondering: profondeur " + depth + " complétée pour coup " + opponentMove);
+                    }
                 }
             }
 
-            System.out.println("Pondering terminé. Profondeur maximale: " + ponderMaxDepth);
+            System.out.println("Pondering terminé. Durée: " + (System.currentTimeMillis() - startTime) + " ms");
         } catch (Exception e) {
             System.err.println("Erreur dans le pondering: " + e.getMessage());
         }
     }
 
+    // Vérifier si le temps de pondering est presque écoulé
+    private boolean timeIsRunningOut() {
+        long elapsedTime = System.currentTimeMillis() - startTime;
+        return elapsedTime > MAX_PONDERING_TIME;
+    }
+
     // AlphaBeta simplifié pour le pondering
     private int alphaBeta(Board board, boolean isMaximizing, int alpha, int beta, int depth) {
-        if (!isPondering.get() || depth <= 0 || board.isTerminal()) {
+        if (!isPondering.get() || timeIsRunningOut() || depth <= 0 || board.isTerminal()) {
             return evaluator.evaluate(board);
         }
 
@@ -132,7 +161,7 @@ public class Pondering {
         if (isMaximizing) {
             int best = -1000;
             for (Move move : moves) {
-                if (!isPondering.get()) break;
+                if (!isPondering.get() || timeIsRunningOut()) break;
 
                 Board newBoard = board.copy();
                 newBoard.play(move, cpuMark);
@@ -145,7 +174,7 @@ public class Pondering {
         } else {
             int best = 1000;
             for (Move move : moves) {
-                if (!isPondering.get()) break;
+                if (!isPondering.get() || timeIsRunningOut()) break;
 
                 Board newBoard = board.copy();
                 newBoard.play(move, opponentMark);
@@ -167,7 +196,8 @@ public class Pondering {
                 ponderingFuture.cancel(false);
 
                 try {
-                    ponderingFuture.get(100, TimeUnit.MILLISECONDS);
+                    // Attendre moins longtemps pour l'annulation
+                    ponderingFuture.get(50, TimeUnit.MILLISECONDS);
                 } catch (Exception e) {
                     // Ignorer les exceptions d'annulation
                 }

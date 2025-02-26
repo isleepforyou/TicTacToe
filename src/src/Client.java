@@ -149,12 +149,16 @@ class Client {
 
     // Met à jour le plateau avec le coup de l'adversaire
     private static void updateBoardWithOpponentMove(String moveStr) {
+        System.out.println("Coup de l'adversaire: " + moveStr);
         Move move = stringToMove(moveStr);
         board.play(move, opponentMark);
     }
 
     // Obtient le prochain coup de l'IA
     private static String getNextCPUMove() {
+        System.out.println("Calcul du prochain coup...");
+        long startTime = System.currentTimeMillis();
+
         ArrayList<Move> bestMoves = cpu.getNextMoveAB(board);
 
         if (bestMoves.isEmpty()) {
@@ -164,6 +168,7 @@ class Client {
                 Move defaultMove = availableMoves.get(0);
                 String moveStr = moveToString(defaultMove);
                 board.play(defaultMove, cpuMark);
+                System.out.println("Coup par défaut: " + moveStr);
                 return moveStr;
             }
             return "A1"; // Coup par défaut en cas de problème
@@ -176,7 +181,11 @@ class Client {
         // Mettre à jour notre représentation du plateau
         board.play(selectedMove, cpuMark);
 
-        return moveToString(selectedMove);
+        String moveStr = moveToString(selectedMove);
+        long endTime = System.currentTimeMillis();
+        System.out.println("Notre coup: " + moveStr + " (temps: " + (endTime - startTime) + " ms)");
+
+        return moveStr;
     }
 
     // Met à jour le plateau à partir de la chaîne reçue du serveur
