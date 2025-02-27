@@ -54,7 +54,7 @@ class Board {
         }
     }
 
-    private boolean isValidLocalBoard(int localRow, int localCol) {
+    public boolean isValidLocalBoard(int localRow, int localCol) {
         // Si aucun plateau local n'est spécifié, tous sont valides s'ils ne sont pas fermés
         if (nextLocalRow == -1 && nextLocalCol == -1) {
             return !isLocalBoardClosed(localRow, localCol);

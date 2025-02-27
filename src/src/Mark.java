@@ -2,6 +2,6 @@
 enum Mark{
     X,
     O,
-    EMPTY
+    EMPTY,
 }
 
