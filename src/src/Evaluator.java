@@ -20,16 +20,16 @@ public class Evaluator {
 
     // Poids des positions pour plateaux locaux
     private static final int[][] POSITION_WEIGHTS = {
-            {3, 1, 3}, // Coin, Bord, Coin
-            {1, 5, 1}, // Bord, Centre, Bord
-            {3, 1, 3}  // Coin, Bord, Coin
+            {3, 1, 3},
+            {1, 5, 1},
+            {3, 1, 3}
     };
 
     // Poids des plateaux locaux
     private static final int[][] BOARD_WEIGHTS = {
-            {3, 2, 3}, // Plateaux Coin, Bord, Coin
-            {2, 5, 2}, // Plateaux Bord, Centre, Bord
-            {3, 2, 3}  // Plateaux Coin, Bord, Coin
+            {3, 2, 3},
+            {2, 5, 2},
+            {3, 2, 3}
     };
 
     // Évalue la position pour le joueur (4 pour X, 2 pour O)
@@ -91,7 +91,7 @@ public class Evaluator {
 
             // Si prochain plateau est déjà gagné, c'est mauvais
             if (localBoardStatus[nextLocalBoard] != 0) {
-                score -= 150;
+                score -= 200;
             }
             // Si le prochain plateau est stratégique mais pas gagné, c'est désavantageux
             else if (nextBoardWeight > 1) {
