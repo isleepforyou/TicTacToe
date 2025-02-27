@@ -7,7 +7,7 @@ import java.net.*;
 public class Client {
     private static final int PLAYER_X = 4;
     private static final int PLAYER_O = 2;
-    private static final long TIME_LIMIT_MILLIS = 2800; // 2.8 secondes
+    private static final long TIME_LIMIT_MILLIS = 2900; // 2.9 secondes
 
     private Socket socket;
     private BufferedInputStream input;

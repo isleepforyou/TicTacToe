@@ -46,8 +46,8 @@ L'IA utilise:
 
 ## Particularités techniques
 
-- Temps limite de réflexion: 2.8 secondes par coup
-- Profondeur maximale d'analyse: 12 niveaux
+- Temps limite de réflexion: 2.9 secondes par coup
+- Profondeur maximale d'analyse: 20 niveaux
 
 ## Format de communication
 
