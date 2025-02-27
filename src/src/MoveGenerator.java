@@ -2,20 +2,20 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Generates valid moves for the Ultimate Tic-Tac-Toe game
+ * Génère les coups valides pour Ultimate Tic-Tac-Toe
  */
 public class MoveGenerator {
-    // Generate all valid moves for the current board state
+    // Génère tous les coups valides
     public static List<Move> generateMoves(Board board) {
         List<Move> validMoves = new ArrayList<>();
         int nextLocalBoard = board.getNextLocalBoard();
         int[][] boardState = board.getBoard();
         int[] localBoardStatus = board.getLocalBoardStatus();
 
-        // If nextLocalBoard is -1, the player can play anywhere on any open local board
+        // Si nextLocalBoard est -1, joueur peut jouer partout
         if (nextLocalBoard == -1) {
             for (int localBoard = 0; localBoard < 9; localBoard++) {
-                // Skip closed local boards
+                // Ignore plateaux fermés
                 if (localBoardStatus[localBoard] != 0) {
                     continue;
                 }
@@ -35,7 +35,7 @@ public class MoveGenerator {
                 }
             }
         } else {
-            // The player must play in the specified local board
+            // Joueur doit jouer dans le plateau spécifié
             int startRow = (nextLocalBoard / 3) * 3;
             int startCol = (nextLocalBoard % 3) * 3;
 
@@ -54,7 +54,7 @@ public class MoveGenerator {
         return validMoves;
     }
 
-    // Convert a move like "D6" to row and column indices
+    // Convertit un coup comme "D6" en indices ligne et colonne
     public static Move parseMove(String moveStr) {
         if (moveStr == null || moveStr.length() < 2) {
             return null;
@@ -66,7 +66,7 @@ public class MoveGenerator {
         int col = colChar - 'A';
         int row = '9' - rowChar;
 
-        // Validate the move
+        // Valide le coup
         if (col < 0 || col > 8 || row < 0 || row > 8) {
             return null;
         }
@@ -74,7 +74,7 @@ public class MoveGenerator {
         return new Move(row, col);
     }
 
-    // Convert row and column indices to a move string like "D6"
+    // Convertit indices en chaîne comme "D6"
     public static String formatMove(Move move) {
         char colChar = (char)('A' + move.getCol());
         char rowChar = (char)('9' - move.getRow());

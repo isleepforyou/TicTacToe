@@ -1,5 +1,5 @@
 /**
- * Represents a move in the Ultimate Tic-Tac-Toe game
+ * Représente un coup dans le jeu Ultimate Tic-Tac-Toe
  */
 public class Move {
     private int row;

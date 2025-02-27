@@ -1,23 +1,22 @@
 /**
- * Represents the Ultimate Tic-Tac-Toe game board
+ * Plateau de jeu Ultimate Tic-Tac-Toe
  */
 public class Board {
-    // The board is represented as a 9x9 grid, where each cell can be 0 (empty), 2 (O), or 4 (X)
+    // Plateau 9x9: 0 (vide), 2 (O), 4 (X)
     private int[][] board;
 
-    // Keeps track of which local board the next player must play in (-1 if they can play anywhere)
+    // Plateau local pour prochain tour (-1 si choix libre)
     private int nextLocalBoard;
 
-    // Keeps track of which local boards have been won by X, O, or are full (drawn)
-    private int[] localBoardStatus; // 0: open, 4: X won, 2: O won, 1: drawn
+    // État des plateaux locaux: 0 (ouvert), 4 (X gagne), 2 (O gagne), 1 (nul)
+    private int[] localBoardStatus;
 
     public Board() {
         board = new int[9][9];
         localBoardStatus = new int[9];
-        nextLocalBoard = -1; // Initially, the player can play anywhere
+        nextLocalBoard = -1;
     }
 
-    // Constructor that creates a board from a given state
     public Board(int[][] board, int nextLocalBoard) {
         this.board = new int[9][9];
         for (int i = 0; i < 9; i++) {
@@ -31,7 +30,7 @@ public class Board {
         updateLocalBoardStatuses();
     }
 
-    // Copy constructor
+    // Constructeur par copie
     public Board(Board other) {
         this.board = new int[9][9];
         for (int i = 0; i < 9; i++) {
@@ -47,7 +46,7 @@ public class Board {
         }
     }
 
-    // Initialize the board from a 1D array (as received from the server)
+    // Initialise depuis tableau 1D (reçu du serveur)
     public void initializeBoard(int[] boardValues) {
         int x = 0, y = 0;
         for (int i = 0; i < boardValues.length; i++) {
@@ -61,7 +60,7 @@ public class Board {
         updateLocalBoardStatuses();
     }
 
-    // Make a move on the board
+    // Joue un coup
     public boolean makeMove(int globalRow, int globalCol, int player) {
         // Check if the move is valid
         if (!isValidMove(globalRow, globalCol)) {
@@ -89,7 +88,7 @@ public class Board {
         return true;
     }
 
-    // Check if a move is valid
+    // Vérifie si coup valide
     public boolean isValidMove(int globalRow, int globalCol) {
         // Check if the cell is empty
         if (board[globalRow][globalCol] != 0) {
@@ -115,7 +114,7 @@ public class Board {
         return localBoardStatus[localBoard] == 0;
     }
 
-    // Update the status of all local boards
+    // Mise à jour des états des plateaux locaux
     private void updateLocalBoardStatuses() {
         for (int i = 0; i < 9; i++) {
             int row = (i / 3) * 3;
@@ -125,7 +124,7 @@ public class Board {
         }
     }
 
-    // Check the status of a local board (0: open, 4: X won, 2: O won, 1: drawn)
+    // Vérifie l'état d'un plateau local
     private int checkLocalBoardStatus(int startRow, int startCol) {
         // Check rows
         for (int i = 0; i < 3; i++) {
@@ -175,7 +174,7 @@ public class Board {
         return isFull ? 1 : 0;
     }
 
-    // Check if the game is over and who won (0: not over, 4: X won, 2: O won, 1: drawn)
+    // Vérifie l'état global du jeu
     public int checkGameStatus() {
         // Check rows
         for (int i = 0; i < 3; i++) {
@@ -237,7 +236,7 @@ public class Board {
         return localBoardStatus;
     }
 
-    // Debug method to print the board
+    // Affiche le plateau pour debug
     public void printBoard() {
         for (int i = 0; i < 9; i++) {
             if (i % 3 == 0 && i > 0) {

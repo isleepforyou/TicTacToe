@@ -2,19 +2,19 @@ import java.io.*;
 import java.net.*;
 
 /**
- * Client class for the Ultimate Tic-Tac-Toe game
+ * Client pour jeu Ultimate Tic-Tac-Toe
  */
 public class Client {
     private static final int PLAYER_X = 4;
     private static final int PLAYER_O = 2;
-    private static final long TIME_LIMIT_MILLIS = 2800; // 2.8 seconds (giving 0.2 seconds buffer)
+    private static final long TIME_LIMIT_MILLIS = 2800; // 2.8 secondes
 
     private Socket socket;
     private BufferedInputStream input;
     private BufferedOutputStream output;
     private BufferedReader console;
     private Board board;
-    private int player; // 4 for X, 2 for O
+    private int player; // 4 pour X, 2 pour O
 
     public Client(String serverAddress, int port) throws IOException {
         socket = new Socket(serverAddress, port);
@@ -31,19 +31,19 @@ public class Client {
                 System.out.println("Received command: " + cmd);
 
                 if (cmd == '1') {
-                    // Playing as X
+                    // Joue en tant que X
                     player = PLAYER_X;
                     handleStartGame();
 
-                    // X plays first, so make a move
+                    // X joue en premier
                     makeAIMove();
                 } else if (cmd == '2') {
-                    // Playing as O
+                    // Joue en tant que O
                     player = PLAYER_O;
                     handleStartGame();
                     System.out.println("Waiting for X's move...");
                 } else if (cmd == '3') {
-                    // Server is asking for the next move
+                    // Serveur demande le prochain coup
                     byte[] aBuffer = new byte[16];
                     int size = input.available();
                     System.out.println("Size: " + size);
@@ -52,7 +52,7 @@ public class Client {
                     String lastMoveStr = new String(aBuffer).trim();
                     System.out.println("Last move: " + lastMoveStr);
 
-                    // Update the board with the opponent's move
+                    // Met à jour le plateau avec le coup adverse
                     Move lastMove = MoveGenerator.parseMove(lastMoveStr);
                     if (lastMove != null && !lastMoveStr.equals("A0")) {
                         int opponent = (player == PLAYER_X) ? PLAYER_O : PLAYER_X;
@@ -61,21 +61,21 @@ public class Client {
                         board.printBoard();
                     }
 
-                    // Make our move
+                    // Joue notre coup
                     makeAIMove();
                 } else if (cmd == '4') {
-                    // Invalid move, try again
+                    // Coup invalide
                     System.out.println("Invalid move! Trying again...");
                     makeAIMove();
                 } else if (cmd == '5') {
-                    // Game over
+                    // Fin de partie
                     byte[] aBuffer = new byte[16];
                     int size = input.available();
                     input.read(aBuffer, 0, size);
                     String lastMoveStr = new String(aBuffer).trim();
                     System.out.println("Game over. Last move: " + lastMoveStr);
 
-                    // Just send a newline to acknowledge
+                    // Envoi d'un retour à la ligne pour accuser réception
                     output.write("\n".getBytes(), 0, 1);
                     output.flush();
                     break;
@@ -98,7 +98,7 @@ public class Client {
         String boardString = new String(aBuffer).trim();
         System.out.println("Board: " + boardString);
 
-        // Initialize the board
+        // Initialise le plateau
         String[] boardValues = boardString.split(" ");
         int[] boardInts = new int[boardValues.length];
         for (int i = 0; i < boardValues.length; i++) {
@@ -115,19 +115,19 @@ public class Client {
         System.out.println("AI thinking...");
         long startTime = System.currentTimeMillis();
 
-        // Find the best move
+        // Trouve le meilleur coup
         Move bestMove = MinimaxAlphaBeta.findBestMove(board, player, TIME_LIMIT_MILLIS);
 
         if (bestMove != null) {
-            // Convert the move to a string
+            // Convertit le coup en chaîne
             String moveStr = MoveGenerator.formatMove(bestMove);
             System.out.println("AI's move: " + moveStr);
 
-            // Make the move on our board
+            // Joue le coup sur notre plateau
             board.makeMove(bestMove.getRow(), bestMove.getCol(), player);
             board.printBoard();
 
-            // Send the move to the server
+            // Envoie le coup au serveur
             output.write(moveStr.getBytes(), 0, moveStr.length());
             output.flush();
 
@@ -142,7 +142,7 @@ public class Client {
         String serverAddress = "localhost";
         int port = 8888;
 
-        // Parse command-line arguments
+        // Analyse des arguments
         if (args.length > 0) {
             serverAddress = args[0];
         }
