@@ -4,7 +4,7 @@ import java.util.List;
  * Algorithme Minimax avec élagage Alpha-Beta pour Ultimate Tic-Tac-Toe
  */
 public class MinimaxAlphaBeta {
-    private static final int MAX_DEPTH = 12;
+    private static final int MAX_DEPTH = 16;
     private static long timeLimit;
     private static long startTime;
     private static boolean timeLimitReached;
@@ -44,7 +44,6 @@ public class MinimaxAlphaBeta {
                 if (!timeLimitReached) {
                     lastCompletedMove = move;
                     bestMove = move;
-                    System.out.println("Completed search at depth " + depth);
                 } else {
                     break;
                 }

@@ -28,7 +28,7 @@ public class Evaluator {
     // Poids des plateaux locaux
     private static final int[][] BOARD_WEIGHTS = {
             {3, 2, 3}, // Plateaux Coin, Bord, Coin
-            {2, 4, 2}, // Plateaux Bord, Centre, Bord
+            {2, 5, 2}, // Plateaux Bord, Centre, Bord
             {3, 2, 3}  // Plateaux Coin, Bord, Coin
     };
 
