@@ -1,217 +1,217 @@
 import java.io.*;
 import java.net.*;
-import java.util.ArrayList;
 
 class Client {
     private static Board board;
-    private static CPUPlayer cpu;
+    private static MiniMax miniMax;
     private static Mark cpuMark;
-    private static Mark opponentMark;
 
     public static void main(String[] args) {
-        Socket MyClient;
-        BufferedInputStream input;
-        BufferedOutputStream output;
-
-        // Initialiser le plateau
-        board = new Board();
-
-        // Déterminer quel joueur nous sommes (X ou O) en fonction des arguments
+        // Determine player mark (X or O)
         if (args.length > 0 && args[0].equalsIgnoreCase("O")) {
             cpuMark = Mark.O;
-            opponentMark = Mark.X;
         } else {
             cpuMark = Mark.X;
-            opponentMark = Mark.O;
         }
 
-        // Créer l'IA
-        cpu = new CPUPlayer(cpuMark);
+        // Initialize board and AI
+        board = new Board();
 
-        // Adresse du serveur
+        // Set max depth based on system capabilities
+        int maxDepth = Runtime.getRuntime().availableProcessors() > 1 ? 8 : 6;
+        miniMax = new MiniMax(cpuMark, maxDepth);
+
+        // Server connection details
         String serverAddress = "localhost";
         if (args.length > 1) {
             serverAddress = args[1];
         }
 
         try {
-            MyClient = new Socket(serverAddress, 8888);
+            Socket socket = new Socket(serverAddress, 8888);
+            BufferedInputStream input = new BufferedInputStream(socket.getInputStream());
+            BufferedOutputStream output = new BufferedOutputStream(socket.getOutputStream());
 
-            input = new BufferedInputStream(MyClient.getInputStream());
-            output = new BufferedOutputStream(MyClient.getOutputStream());
-
-            while(true) {
+            while (true) {
                 char cmd = (char)input.read();
 
-                // Début de la partie en joueur X (premier)
-                if(cmd == '1') {
-                    byte[] aBuffer = new byte[1024];
+                // Start game as player X (first)
+                if (cmd == '1') {
+                    byte[] buffer = new byte[1024];
                     int size = input.available();
-                    input.read(aBuffer, 0, size);
-                    String s = new String(aBuffer).trim();
+                    input.read(buffer, 0, size);
+                    String boardState = new String(buffer).trim();
 
-                    // Mise à jour du plateau
-                    updateBoardFromString(s);
+                    // Update board from server state
+                    updateBoardFromString(boardState);
 
-                    // Obtenir le coup de l'IA
-                    String move = getNextCPUMove();
+                    // Get AI move
+                    Move move = miniMax.findBestMove(board);
+                    String moveStr = moveToString(move);
 
-                    output.write(move.getBytes(), 0, move.length());
+                    // Send move to server
+                    output.write(moveStr.getBytes(), 0, moveStr.length());
                     output.flush();
                 }
 
-                // Début de la partie en joueur O (second)
-                if(cmd == '2') {
-                    byte[] aBuffer = new byte[1024];
+                // Start game as player O (second)
+                else if (cmd == '2') {
+                    byte[] buffer = new byte[1024];
                     int size = input.available();
-                    input.read(aBuffer, 0, size);
-                    String s = new String(aBuffer).trim();
+                    input.read(buffer, 0, size);
+                    String boardState = new String(buffer).trim();
 
-                    // Mise à jour du plateau
-                    updateBoardFromString(s);
+                    // Update board
+                    updateBoardFromString(boardState);
                 }
 
-                // Le serveur demande le prochain coup
-                if(cmd == '3') {
-                    byte[] aBuffer = new byte[16];
+                // Server requests next move
+                else if (cmd == '3') {
+                    byte[] buffer = new byte[16];
                     int size = input.available();
-                    input.read(aBuffer, 0, size);
-                    String s = new String(aBuffer).trim();
+                    input.read(buffer, 0, size);
+                    String opponentMove = new String(buffer).trim();
 
-                    // Mise à jour du plateau avec le coup de l'adversaire
-                    if (!s.equals("A0")) { // A0 est un coup invalide pour l'initialisation
-                        updateBoardWithOpponentMove(s);
+                    // Apply opponent's move
+                    if (!opponentMove.equals("A0")) {
+                        applyOpponentMove(opponentMove);
                     }
 
-                    // Obtenir le coup de l'IA
-                    String move = getNextCPUMove();
+                    // Calculate our move
+                    Move move = miniMax.findBestMove(board);
+                    String moveStr = moveToString(move);
 
-                    output.write(move.getBytes(), 0, move.length());
+                    // Apply our move to our board
+                    board.play(move, cpuMark);
+
+                    // Send move to server
+                    output.write(moveStr.getBytes(), 0, moveStr.length());
                     output.flush();
                 }
 
-                // Le dernier coup est invalide
-                if(cmd == '4') {
-                    // Obtenir un nouveau coup de l'IA
-                    String move = getNextCPUMove();
+                // Invalid move
+                else if (cmd == '4') {
+                    // Get a new move
+                    Move move = miniMax.findBestMove(board);
+                    String moveStr = moveToString(move);
 
-                    output.write(move.getBytes(), 0, move.length());
+                    // Apply new move to our board
+                    board.play(move, cpuMark);
+
+                    // Send move to server
+                    output.write(moveStr.getBytes(), 0, moveStr.length());
                     output.flush();
                 }
 
-                // La partie est terminée
-                if(cmd == '5') {
-                    byte[] aBuffer = new byte[16];
+                // Game over
+                else if (cmd == '5') {
+                    byte[] buffer = new byte[16];
                     int size = input.available();
-                    input.read(aBuffer, 0, size);
+                    input.read(buffer, 0, size);
 
-                    // Libérer les ressources du pool de threads
-                    cpu.shutdown();
-
-                    // Réinitialiser le plateau pour une nouvelle partie
+                    // Reset for next game
                     board = new Board();
-                    cpu = new CPUPlayer(cpuMark);
 
-                    // Continuer automatiquement
+                    // Send ready signal
                     output.write("\n".getBytes(), 0, 1);
                     output.flush();
                 }
             }
-        }
-        catch (IOException e) {
-            System.out.println("Erreur: " + e);
-            if (cpu != null) {
-                cpu.shutdown();
-            }
+        } catch (IOException e) {
+            System.out.println("Error: " + e.getMessage());
         }
     }
 
-    // Convertit la notation serveur (ex: "A1") en objet Move
+    // Convert server notation (e.g., "A1") to a Move object
     private static Move stringToMove(String moveStr) {
         if (moveStr.length() >= 2) {
             char colChar = moveStr.charAt(0);
             char rowChar = moveStr.charAt(1);
 
-            int col = colChar - 'A';
-            int row = rowChar - '1';
+            // Determine the global and local indices
+            // This would need to be modified based on your exact server protocol
+            int globalRow = (rowChar - '1') / 3;
+            int globalCol = (colChar - 'A') / 3;
+            int globalIndex = globalRow * 3 + globalCol;
 
-            return new Move(row, col);
+            int localRow = (rowChar - '1') % 3;
+            int localCol = (colChar - 'A') % 3;
+            int localIndex = localRow * 3 + localCol;
+
+            return new Move(globalIndex, localIndex);
         }
-        return new Move();
+        return null;
     }
 
-    // Convertit un objet Move en notation serveur (ex: "A1")
+    // Convert a Move object to server notation (e.g., "A1")
     private static String moveToString(Move move) {
-        char colChar = (char) ('A' + move.getCol());
-        char rowChar = (char) ('1' + move.getRow());
+        if (move == null) {
+            return "A1"; // Default move
+        }
+
+        int globalIndex = move.getGlobalIndex();
+        int localIndex = move.getLocalIndex();
+
+        // Determine the global position
+        int globalRow = globalIndex / 3;
+        int globalCol = globalIndex % 3;
+
+        // Determine the local position
+        int localRow = localIndex / 3;
+        int localCol = localIndex % 3;
+
+        // Calculate the absolute row and column
+        int row = globalRow * 3 + localRow;
+        int col = globalCol * 3 + localCol;
+
+        // Convert to server notation
+        char colChar = (char)('A' + col);
+        char rowChar = (char)('1' + row);
+
         return String.valueOf(colChar) + rowChar;
     }
 
-    // Met à jour le plateau avec le coup de l'adversaire
-    private static void updateBoardWithOpponentMove(String moveStr) {
-        System.out.println("Coup de l'adversaire: " + moveStr);
+    // Apply opponent's move to our board
+    private static void applyOpponentMove(String moveStr) {
         Move move = stringToMove(moveStr);
+        Mark opponentMark = (cpuMark == Mark.X) ? Mark.O : Mark.X;
         board.play(move, opponentMark);
     }
 
-    // Obtient le prochain coup de l'IA
-    private static String getNextCPUMove() {
-        System.out.println("Calcul du prochain coup...");
-        long startTime = System.currentTimeMillis();
-
-        ArrayList<Move> bestMoves = cpu.getNextMoveAB(board);
-
-        if (bestMoves.isEmpty()) {
-            // Chercher un coup valide par défaut
-            ArrayList<Move> availableMoves = board.getAvailableMoves();
-            if (!availableMoves.isEmpty()) {
-                Move defaultMove = availableMoves.get(0);
-                String moveStr = moveToString(defaultMove);
-                board.play(defaultMove, cpuMark);
-                System.out.println("Coup par défaut: " + moveStr);
-                return moveStr;
-            }
-            return "A1"; // Coup par défaut en cas de problème
-        }
-
-        // Choisir un coup aléatoire parmi les meilleurs
-        int index = (int) (Math.random() * bestMoves.size());
-        Move selectedMove = bestMoves.get(index);
-
-        // Mettre à jour notre représentation du plateau
-        board.play(selectedMove, cpuMark);
-
-        String moveStr = moveToString(selectedMove);
-        long endTime = System.currentTimeMillis();
-        System.out.println("Notre coup: " + moveStr + " (temps: " + (endTime - startTime) + " ms)");
-
-        return moveStr;
-    }
-
-    // Met à jour le plateau à partir de la chaîne reçue du serveur
+    // Update board state from server string
     private static void updateBoardFromString(String boardStr) {
-        String[] boardValues = boardStr.split(" ");
+        // This would need to be implemented based on your server protocol
+        // For example, parsing a string representation of the board state
 
-        // Réinitialiser le plateau
+        // Reset the board
         board = new Board();
 
-        // Si la chaîne est vide ou ne contient pas assez de valeurs, retourner
-        if (boardValues.length < 81) {
-            return;
+        // Example implementation (modify based on actual protocol):
+        String[] values = boardStr.split(" ");
+        if (values.length < 81) return; // Not enough values
+
+        for (int i = 0; i < 9; i++) {
+            for (int j = 0; j < 9; j++) {
+                int index = i * 9 + j;
+                int globalIndex = (i / 3) * 3 + (j / 3);
+                int localIndex = (i % 3) * 3 + (j % 3);
+
+                int value = Integer.parseInt(values[index]);
+                if (value == 4) { // X
+                    board.getLocalBoards()[globalIndex][localIndex] = Mark.X;
+                } else if (value == 2) { // O
+                    board.getLocalBoards()[globalIndex][localIndex] = Mark.O;
+                }
+            }
         }
 
-        // Mettre à jour le plateau avec les valeurs reçues
-        for (int y = 0; y < 9; y++) {
-            for (int x = 0; x < 9; x++) {
-                int index = y * 9 + x;
-                if (index < boardValues.length) {
-                    int value = Integer.parseInt(boardValues[index]);
-                    if (value == 4) {
-                        board.getGrid()[y][x] = Mark.X;
-                    } else if (value == 2) {
-                        board.getGrid()[y][x] = Mark.O;
-                    }
-                }
+        // Update global board status for all local boards
+        for (int i = 0; i < 9; i++) {
+            Mark localWinner = board.checkLocalBoardWinner(i);
+            if (localWinner != Mark.EMPTY) {
+                board.getGlobalBoard()[i] = localWinner;
+            } else if (board.isLocalBoardFull(i)) {
+                board.getGlobalBoard()[i] = Mark.DRAW;
             }
         }
     }

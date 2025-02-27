@@ -1,55 +1,27 @@
 class Move {
-    private int row;
-    private int col;
+    private int globalIndex; // Which local board (0-8)
+    private int localIndex;  // Which cell within the local board (0-8)
 
     public Move() {
-        row = -1;
-        col = -1;
+        globalIndex = -1;
+        localIndex = -1;
     }
 
-    public Move(int r, int c) {
-        row = r;
-        col = c;
+    public Move(int globalIndex, int localIndex) {
+        this.globalIndex = globalIndex;
+        this.localIndex = localIndex;
     }
 
-    public int getRow() {
-        return row;
+    public int getGlobalIndex() {
+        return globalIndex;
     }
 
-    public int getCol() {
-        return col;
-    }
-
-    public void setRow(int r) {
-        row = r;
-    }
-
-    public void setCol(int c) {
-        col = c;
-    }
-
-    // Méthodes utilitaires pour le tic-tac-toe géant
-
-    // Obtenir le plateau local (0-2, 0-2)
-    public int getGlobalRow() {
-        return row / 3;
-    }
-
-    public int getGlobalCol() {
-        return col / 3;
-    }
-
-    // Obtenir la position dans le plateau local (0-2, 0-2)
-    public int getLocalRow() {
-        return row % 3;
-    }
-
-    public int getLocalCol() {
-        return col % 3;
+    public int getLocalIndex() {
+        return localIndex;
     }
 
     @Override
     public String toString() {
-        return "(" + row + "," + col + ")";
+        return "Global: " + globalIndex + ", Local: " + localIndex;
     }
 }

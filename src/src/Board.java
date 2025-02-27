@@ -1,374 +1,203 @@
 import java.util.ArrayList;
 
 class Board {
-    private Mark[][] grid;
+    // Global board state (which player has won each local board)
+    private Mark[] globalBoard;
+
+    // Local boards (9 boards, each with 9 cells)
     private Mark[][] localBoards;
-    private int nextLocalRow;
-    private int nextLocalCol;
+
+    // Track which local board must be played next (-1 means any board)
+    private int nextLocalBoardIndex;
 
     public Board() {
-        // Initialisation d'un plateau 9x9
-        grid = new Mark[9][9];
+        // Initialize global board
+        globalBoard = new Mark[9];
         for (int i = 0; i < 9; i++) {
-            for (int j = 0; j < 9; j++) {
-                grid[i][j] = Mark.EMPTY;
-            }
+            globalBoard[i] = Mark.EMPTY;
         }
 
-        // Suivi de l'état des 9 plateaux locaux (3x3)
-        localBoards = new Mark[3][3];
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 3; j++) {
+        // Initialize local boards
+        localBoards = new Mark[9][9];
+        for (int i = 0; i < 9; i++) {
+            for (int j = 0; j < 9; j++) {
                 localBoards[i][j] = Mark.EMPTY;
             }
         }
 
-        // Au début, on peut jouer n'importe où
-        nextLocalRow = -1;
-        nextLocalCol = -1;
+        // Start with any board being playable
+        nextLocalBoardIndex = -1;
     }
 
-    public void play(Move m, Mark mark) {
-        int r = m.getRow();
-        int c = m.getCol();
+    public boolean play(Move move, Mark player) {
+        int globalIdx = move.getGlobalIndex();
+        int localIdx = move.getLocalIndex();
 
-        // Vérifier si le coup est valide
-        if (r >= 0 && r < 9 && c >= 0 && c < 9 && grid[r][c] == Mark.EMPTY) {
-            // Vérifier si le coup est dans le bon plateau local
-            if (isValidLocalBoard(m.getGlobalRow(), m.getGlobalCol())) {
-                grid[r][c] = mark;
+        // Check if this is a valid board to play on
+        if (!isValidBoard(globalIdx)) {
+            return false;
+        }
 
-                // Mettre à jour l'état du plateau local
-                updateLocalBoardState(m.getGlobalRow(), m.getGlobalCol());
+        // Check if the cell is empty
+        if (localBoards[globalIdx][localIdx] != Mark.EMPTY) {
+            return false;
+        }
 
-                // Définir le prochain plateau local où jouer
-                nextLocalRow = m.getLocalRow();
-                nextLocalCol = m.getLocalCol();
+        // Make the move
+        localBoards[globalIdx][localIdx] = player;
 
-                // Si le prochain plateau local est fermé (gagné ou plein), le joueur peut jouer n'importe où
-                if (isLocalBoardClosed(nextLocalRow, nextLocalCol)) {
-                    nextLocalRow = -1;
-                    nextLocalCol = -1;
-                }
-            }
+        // Update local board status if it's won or drawn
+        updateLocalBoardStatus(globalIdx);
+
+        // Set next board to play
+        nextLocalBoardIndex = localIdx;
+
+        // If the next board is already won or full, allow play on any open board
+        if (globalBoard[nextLocalBoardIndex] != Mark.EMPTY) {
+            nextLocalBoardIndex = -1;
+        }
+
+        return true;
+    }
+
+    private boolean isValidBoard(int boardIndex) {
+        // If a specific board is required
+        if (nextLocalBoardIndex != -1) {
+            return boardIndex == nextLocalBoardIndex;
+        }
+
+        // If any board is allowed, it must not be already won/drawn
+        return globalBoard[boardIndex] == Mark.EMPTY;
+    }
+
+    private void updateLocalBoardStatus(int boardIndex) {
+        // Check if the local board is won
+        Mark winner = checkLocalBoardWinner(boardIndex);
+        if (winner != Mark.EMPTY) {
+            globalBoard[boardIndex] = winner;
+            return;
+        }
+
+        // Check if the local board is full (drawn)
+        if (isLocalBoardFull(boardIndex)) {
+            globalBoard[boardIndex] = Mark.DRAW;
         }
     }
 
-    public boolean isValidLocalBoard(int localRow, int localCol) {
-        // Si aucun plateau local n'est spécifié, tous sont valides s'ils ne sont pas fermés
-        if (nextLocalRow == -1 && nextLocalCol == -1) {
-            return !isLocalBoardClosed(localRow, localCol);
-        }
-
-        // Sinon, vérifier si c'est le plateau local attendu
-        return (localRow == nextLocalRow && localCol == nextLocalCol);
-    }
-
-    private boolean isLocalBoardClosed(int localRow, int localCol) {
-        // Un plateau local est fermé s'il est gagné ou plein
-        return localBoards[localRow][localCol] != Mark.EMPTY || isLocalBoardFull(localRow, localCol);
-    }
-
-    private boolean isLocalBoardFull(int localRow, int localCol) {
-        for (int r = localRow * 3; r < (localRow + 1) * 3; r++) {
-            for (int c = localCol * 3; c < (localCol + 1) * 3; c++) {
-                if (grid[r][c] == Mark.EMPTY) {
-                    return false;
-                }
+    public boolean isLocalBoardFull(int boardIndex) {
+        for (int i = 0; i < 9; i++) {
+            if (localBoards[boardIndex][i] == Mark.EMPTY) {
+                return false;
             }
         }
         return true;
     }
 
-    private void updateLocalBoardState(int localRow, int localCol) {
-        Mark winner = checkLocalBoardWinner(localRow, localCol);
-        if (winner != Mark.EMPTY) {
-            localBoards[localRow][localCol] = winner;
-        }
-    }
-
-    // Vérifier s'il y a un gagnant dans un plateau local
-    private Mark checkLocalBoardWinner(int localRow, int localCol) {
-        // Vérifier les lignes
-        for (int r = 0; r < 3; r++) {
-            int row = localRow * 3 + r;
-            if (grid[row][localCol * 3] != Mark.EMPTY &&
-                    grid[row][localCol * 3] == grid[row][localCol * 3 + 1] &&
-                    grid[row][localCol * 3 + 1] == grid[row][localCol * 3 + 2]) {
-                return grid[row][localCol * 3];
+    public Mark checkLocalBoardWinner(int boardIndex) {
+        // Check rows
+        for (int row = 0; row < 3; row++) {
+            if (localBoards[boardIndex][row*3] != Mark.EMPTY &&
+                    localBoards[boardIndex][row*3] == localBoards[boardIndex][row*3 + 1] &&
+                    localBoards[boardIndex][row*3 + 1] == localBoards[boardIndex][row*3 + 2]) {
+                return localBoards[boardIndex][row*3];
             }
         }
 
-        // Vérifier les colonnes
-        for (int c = 0; c < 3; c++) {
-            int col = localCol * 3 + c;
-            if (grid[localRow * 3][col] != Mark.EMPTY &&
-                    grid[localRow * 3][col] == grid[localRow * 3 + 1][col] &&
-                    grid[localRow * 3 + 1][col] == grid[localRow * 3 + 2][col]) {
-                return grid[localRow * 3][col];
+        // Check columns
+        for (int col = 0; col < 3; col++) {
+            if (localBoards[boardIndex][col] != Mark.EMPTY &&
+                    localBoards[boardIndex][col] == localBoards[boardIndex][col + 3] &&
+                    localBoards[boardIndex][col + 3] == localBoards[boardIndex][col + 6]) {
+                return localBoards[boardIndex][col];
             }
         }
 
-        // Vérifier les diagonales
-        int center = localRow * 3 + 1, centerCol = localCol * 3 + 1;
-        if (grid[localRow * 3][localCol * 3] != Mark.EMPTY &&
-                grid[localRow * 3][localCol * 3] == grid[center][centerCol] &&
-                grid[center][centerCol] == grid[localRow * 3 + 2][localCol * 3 + 2]) {
-            return grid[localRow * 3][localCol * 3];
+        // Check diagonals
+        if (localBoards[boardIndex][0] != Mark.EMPTY &&
+                localBoards[boardIndex][0] == localBoards[boardIndex][4] &&
+                localBoards[boardIndex][4] == localBoards[boardIndex][8]) {
+            return localBoards[boardIndex][0];
         }
 
-        if (grid[localRow * 3][localCol * 3 + 2] != Mark.EMPTY &&
-                grid[localRow * 3][localCol * 3 + 2] == grid[center][centerCol] &&
-                grid[center][centerCol] == grid[localRow * 3 + 2][localCol * 3]) {
-            return grid[localRow * 3][localCol * 3 + 2];
+        if (localBoards[boardIndex][2] != Mark.EMPTY &&
+                localBoards[boardIndex][2] == localBoards[boardIndex][4] &&
+                localBoards[boardIndex][4] == localBoards[boardIndex][6]) {
+            return localBoards[boardIndex][2];
         }
 
         return Mark.EMPTY;
     }
 
-    public boolean isTerminal() {
-        // Le jeu est terminé s'il y a un gagnant global
-        if (checkWinner() != Mark.EMPTY) {
+    public Mark checkGlobalWinner() {
+        // Check rows
+        for (int row = 0; row < 3; row++) {
+            if (globalBoard[row*3] != Mark.EMPTY && globalBoard[row*3] != Mark.DRAW &&
+                    globalBoard[row*3] == globalBoard[row*3 + 1] &&
+                    globalBoard[row*3 + 1] == globalBoard[row*3 + 2]) {
+                return globalBoard[row*3];
+            }
+        }
+
+        // Check columns
+        for (int col = 0; col < 3; col++) {
+            if (globalBoard[col] != Mark.EMPTY && globalBoard[col] != Mark.DRAW &&
+                    globalBoard[col] == globalBoard[col + 3] &&
+                    globalBoard[col + 3] == globalBoard[col + 6]) {
+                return globalBoard[col];
+            }
+        }
+
+        // Check diagonals
+        if (globalBoard[0] != Mark.EMPTY && globalBoard[0] != Mark.DRAW &&
+                globalBoard[0] == globalBoard[4] &&
+                globalBoard[4] == globalBoard[8]) {
+            return globalBoard[0];
+        }
+
+        if (globalBoard[2] != Mark.EMPTY && globalBoard[2] != Mark.DRAW &&
+                globalBoard[2] == globalBoard[4] &&
+                globalBoard[4] == globalBoard[6]) {
+            return globalBoard[2];
+        }
+
+        return Mark.EMPTY;
+    }
+
+    public boolean isGameOver() {
+        // Game is over if there's a winner
+        if (checkGlobalWinner() != Mark.EMPTY) {
             return true;
         }
 
-        // Ou si tous les plateaux locaux sont fermés
-        for (int r = 0; r < 3; r++) {
-            for (int c = 0; c < 3; c++) {
-                if (!isLocalBoardClosed(r, c)) {
-                    return false;
-                }
+        // Game is over if all local boards are won or drawn
+        for (int i = 0; i < 9; i++) {
+            if (globalBoard[i] == Mark.EMPTY) {
+                return false;
             }
         }
 
         return true;
-    }
-
-    // Vérifier s'il y a un gagnant global
-    private Mark checkWinner() {
-        // Vérifier les lignes
-        for (int r = 0; r < 3; r++) {
-            if (localBoards[r][0] != Mark.EMPTY &&
-                    localBoards[r][0] == localBoards[r][1] &&
-                    localBoards[r][1] == localBoards[r][2]) {
-                return localBoards[r][0];
-            }
-        }
-
-        // Vérifier les colonnes
-        for (int c = 0; c < 3; c++) {
-            if (localBoards[0][c] != Mark.EMPTY &&
-                    localBoards[0][c] == localBoards[1][c] &&
-                    localBoards[1][c] == localBoards[2][c]) {
-                return localBoards[0][c];
-            }
-        }
-
-        // Vérifier les diagonales
-        if (localBoards[0][0] != Mark.EMPTY &&
-                localBoards[0][0] == localBoards[1][1] &&
-                localBoards[1][1] == localBoards[2][2]) {
-            return localBoards[0][0];
-        }
-
-        if (localBoards[0][2] != Mark.EMPTY &&
-                localBoards[0][2] == localBoards[1][1] &&
-                localBoards[1][1] == localBoards[2][0]) {
-            return localBoards[0][2];
-        }
-
-        return Mark.EMPTY;
-    }
-
-    public int evaluate(Mark mark) {
-        Mark winner = checkWinner();
-        if (winner == mark) {
-            return 100; // Victoire
-        } else if (winner != Mark.EMPTY) {
-            return -100; // Défaite
-        } else if (isTerminal()) {
-            return 0; // Match nul
-        }
-
-        // Évaluation heuristique
-        Mark opponent = (mark == Mark.X) ? Mark.O : Mark.X;
-        int score = 0;
-
-        // Valeur des plateaux locaux gagnés
-        for (int r = 0; r < 3; r++) {
-            for (int c = 0; c < 3; c++) {
-                if (localBoards[r][c] == mark) {
-                    score += 10;
-                    // Bonus pour les positions stratégiques
-                    if ((r == 0 && c == 0) || (r == 0 && c == 2) ||
-                            (r == 2 && c == 0) || (r == 2 && c == 2)) {
-                        score += 2; // Coins
-                    }
-                    if (r == 1 && c == 1) {
-                        score += 3; // Centre
-                    }
-                } else if (localBoards[r][c] == opponent) {
-                    score -= 10;
-                    // Malus pour les positions stratégiques adverses
-                    if ((r == 0 && c == 0) || (r == 0 && c == 2) ||
-                            (r == 2 && c == 0) || (r == 2 && c == 2)) {
-                        score -= 2; // Coins
-                    }
-                    if (r == 1 && c == 1) {
-                        score -= 3; // Centre
-                    }
-                } else {
-                    // Évaluation des plateaux locaux non gagnés
-                    int localScore = evaluateLocalBoard(r, c, mark);
-                    score += localScore;
-                }
-            }
-        }
-
-        // Bonus pour forcer l'adversaire à jouer dans des plateaux désavantageux
-        if (nextLocalRow != -1 && nextLocalCol != -1) {
-            if (isLocalBoardAdvantage(nextLocalRow, nextLocalCol, opponent)) {
-                score -= 5;
-            }
-        }
-
-        return score;
-    }
-
-    private boolean isLocalBoardAdvantage(int localRow, int localCol, Mark player) {
-        // Un plateau est avantageux si le joueur a des options pour gagner
-        int playerLines = 0;
-
-        // Vérifier les lignes
-        for (int r = 0; r < 3; r++) {
-            int count = 0;
-            for (int c = 0; c < 3; c++) {
-                int row = localRow * 3 + r;
-                int col = localCol * 3 + c;
-                if (grid[row][col] == player) count++;
-                else if (grid[row][col] != Mark.EMPTY) count = -100; // Ligne bloquée
-            }
-            if (count == 2) playerLines++;
-        }
-
-        // Vérifier les colonnes
-        for (int c = 0; c < 3; c++) {
-            int count = 0;
-            for (int r = 0; r < 3; r++) {
-                int row = localRow * 3 + r;
-                int col = localCol * 3 + c;
-                if (grid[row][col] == player) count++;
-                else if (grid[row][col] != Mark.EMPTY) count = -100;
-            }
-            if (count == 2) playerLines++;
-        }
-
-        // Vérifier les diagonales
-        int diag1 = 0, diag2 = 0;
-        for (int i = 0; i < 3; i++) {
-            if (grid[localRow * 3 + i][localCol * 3 + i] == player) diag1++;
-            else if (grid[localRow * 3 + i][localCol * 3 + i] != Mark.EMPTY) diag1 = -100;
-
-            if (grid[localRow * 3 + i][localCol * 3 + 2 - i] == player) diag2++;
-            else if (grid[localRow * 3 + i][localCol * 3 + 2 - i] != Mark.EMPTY) diag2 = -100;
-        }
-        if (diag1 == 2) playerLines++;
-        if (diag2 == 2) playerLines++;
-
-        return playerLines > 0;
-    }
-
-    private int evaluateLocalBoard(int localRow, int localCol, Mark mark) {
-        int score = 0;
-        Mark opponent = (mark == Mark.X) ? Mark.O : Mark.X;
-
-        // Évaluer les lignes
-        for (int r = 0; r < 3; r++) {
-            int markCount = 0, opponentCount = 0, emptyCount = 0;
-            for (int c = 0; c < 3; c++) {
-                int row = localRow * 3 + r;
-                int col = localCol * 3 + c;
-                if (grid[row][col] == mark) markCount++;
-                else if (grid[row][col] == opponent) opponentCount++;
-                else emptyCount++;
-            }
-
-            score += evaluateLineScore(markCount, opponentCount, emptyCount);
-        }
-
-        // Évaluer les colonnes
-        for (int c = 0; c < 3; c++) {
-            int markCount = 0, opponentCount = 0, emptyCount = 0;
-            for (int r = 0; r < 3; r++) {
-                int row = localRow * 3 + r;
-                int col = localCol * 3 + c;
-                if (grid[row][col] == mark) markCount++;
-                else if (grid[row][col] == opponent) opponentCount++;
-                else emptyCount++;
-            }
-
-            score += evaluateLineScore(markCount, opponentCount, emptyCount);
-        }
-
-        // Évaluer les diagonales
-        int markCount1 = 0, opponentCount1 = 0, emptyCount1 = 0;
-        int markCount2 = 0, opponentCount2 = 0, emptyCount2 = 0;
-
-        for (int i = 0; i < 3; i++) {
-            // Diagonale 1
-            if (grid[localRow * 3 + i][localCol * 3 + i] == mark) markCount1++;
-            else if (grid[localRow * 3 + i][localCol * 3 + i] == opponent) opponentCount1++;
-            else emptyCount1++;
-
-            // Diagonale 2
-            if (grid[localRow * 3 + i][localCol * 3 + 2 - i] == mark) markCount2++;
-            else if (grid[localRow * 3 + i][localCol * 3 + 2 - i] == opponent) opponentCount2++;
-            else emptyCount2++;
-        }
-
-        score += evaluateLineScore(markCount1, opponentCount1, emptyCount1);
-        score += evaluateLineScore(markCount2, opponentCount2, emptyCount2);
-
-        return score;
-    }
-
-    private int evaluateLineScore(int markCount, int opponentCount, int emptyCount) {
-        if (markCount == 3) return 10; // Ligne gagnée
-        if (opponentCount == 3) return -10; // Ligne perdue
-
-        if (markCount == 2 && emptyCount == 1) return 3; // Opportunité de gagner
-        if (opponentCount == 2 && emptyCount == 1) return -3; // Menace à bloquer
-
-        if (markCount == 1 && emptyCount == 2) return 1; // Début de ligne
-        if (opponentCount == 1 && emptyCount == 2) return -1; // Début de ligne adverse
-
-        return 0;
     }
 
     public ArrayList<Move> getAvailableMoves() {
         ArrayList<Move> moves = new ArrayList<>();
 
-        // Si le joueur doit jouer dans un plateau local spécifique
-        if (nextLocalRow != -1 && nextLocalCol != -1) {
-            // Si ce plateau est fermé, on peut jouer n'importe où
-            if (isLocalBoardClosed(nextLocalRow, nextLocalCol)) {
-                for (int lr = 0; lr < 3; lr++) {
-                    for (int lc = 0; lc < 3; lc++) {
-                        if (!isLocalBoardClosed(lr, lc)) {
-                            addMovesForLocalBoard(moves, lr, lc);
-                        }
-                    }
+        // If playing on a specific board is required
+        if (nextLocalBoardIndex != -1 && globalBoard[nextLocalBoardIndex] == Mark.EMPTY) {
+            for (int i = 0; i < 9; i++) {
+                if (localBoards[nextLocalBoardIndex][i] == Mark.EMPTY) {
+                    moves.add(new Move(nextLocalBoardIndex, i));
                 }
-            } else {
-                // Sinon, on doit jouer dans ce plateau local
-                addMovesForLocalBoard(moves, nextLocalRow, nextLocalCol);
             }
-        } else {
-            // Si on peut jouer n'importe où
-            for (int lr = 0; lr < 3; lr++) {
-                for (int lc = 0; lc < 3; lc++) {
-                    if (!isLocalBoardClosed(lr, lc)) {
-                        addMovesForLocalBoard(moves, lr, lc);
+            return moves;
+        }
+
+        // If can play on any open board
+        for (int board = 0; board < 9; board++) {
+            if (globalBoard[board] == Mark.EMPTY) {
+                for (int cell = 0; cell < 9; cell++) {
+                    if (localBoards[board][cell] == Mark.EMPTY) {
+                        moves.add(new Move(board, cell));
                     }
                 }
             }
@@ -377,61 +206,37 @@ class Board {
         return moves;
     }
 
-    private void addMovesForLocalBoard(ArrayList<Move> moves, int localRow, int localCol) {
-        for (int r = 0; r < 3; r++) {
-            for (int c = 0; c < 3; c++) {
-                int row = localRow * 3 + r;
-                int col = localCol * 3 + c;
-                if (grid[row][col] == Mark.EMPTY) {
-                    moves.add(new Move(row, col));
-                }
-            }
-        }
-    }
-
-    // Méthode pour vérifier si le prochain plateau local est spécifié
-    public boolean getNextLocalBoard() {
-        return nextLocalRow != -1 && nextLocalCol != -1;
-    }
-
     public Board copy() {
         Board newBoard = new Board();
 
-        // Copier le plateau 9x9
-        for (int r = 0; r < 9; r++) {
-            for (int c = 0; c < 9; c++) {
-                newBoard.grid[r][c] = this.grid[r][c];
+        // Copy global board state
+        for (int i = 0; i < 9; i++) {
+            newBoard.globalBoard[i] = this.globalBoard[i];
+        }
+
+        // Copy local boards
+        for (int i = 0; i < 9; i++) {
+            for (int j = 0; j < 9; j++) {
+                newBoard.localBoards[i][j] = this.localBoards[i][j];
             }
         }
 
-        // Copier les états des plateaux locaux
-        for (int r = 0; r < 3; r++) {
-            for (int c = 0; c < 3; c++) {
-                newBoard.localBoards[r][c] = this.localBoards[r][c];
-            }
-        }
-
-        // Copier le prochain plateau local
-        newBoard.nextLocalRow = this.nextLocalRow;
-        newBoard.nextLocalCol = this.nextLocalCol;
+        // Copy next board index
+        newBoard.nextLocalBoardIndex = this.nextLocalBoardIndex;
 
         return newBoard;
     }
 
-    public Mark[][] getGrid() {
-        return grid;
+    // Getters
+    public Mark[] getGlobalBoard() {
+        return globalBoard;
     }
 
-    // Ajout pour faciliter l'accès aux états locaux
     public Mark[][] getLocalBoards() {
         return localBoards;
     }
 
-    public int getNextLocalRow() {
-        return nextLocalRow;
-    }
-
-    public int getNextLocalCol() {
-        return nextLocalCol;
+    public int getNextLocalBoardIndex() {
+        return nextLocalBoardIndex;
     }
 }
