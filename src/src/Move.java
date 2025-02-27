@@ -1,27 +1,25 @@
-class Move {
-    private int globalIndex; // Which local board (0-8)
-    private int localIndex;  // Which cell within the local board (0-8)
+/**
+ * Represents a move in the Ultimate Tic-Tac-Toe game
+ */
+public class Move {
+    private int row;
+    private int col;
 
-    public Move() {
-        globalIndex = -1;
-        localIndex = -1;
+    public Move(int row, int col) {
+        this.row = row;
+        this.col = col;
     }
 
-    public Move(int globalIndex, int localIndex) {
-        this.globalIndex = globalIndex;
-        this.localIndex = localIndex;
+    public int getRow() {
+        return row;
     }
 
-    public int getGlobalIndex() {
-        return globalIndex;
-    }
-
-    public int getLocalIndex() {
-        return localIndex;
+    public int getCol() {
+        return col;
     }
 
     @Override
     public String toString() {
-        return "Global: " + globalIndex + ", Local: " + localIndex;
+        return "Move(" + row + ", " + col + ")";
     }
 }

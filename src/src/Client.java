@@ -1,218 +1,167 @@
 import java.io.*;
 import java.net.*;
 
-class Client {
-    private static Board board;
-    private static MiniMax miniMax;
-    private static Mark cpuMark;
+/**
+ * Client class for the Ultimate Tic-Tac-Toe game
+ */
+public class Client {
+    private static final int PLAYER_X = 4;
+    private static final int PLAYER_O = 2;
+    private static final long TIME_LIMIT_MILLIS = 2800; // 2.8 seconds (giving 0.2 seconds buffer)
 
-    public static void main(String[] args) {
-        // Determine player mark (X or O)
-        if (args.length > 0 && args[0].equalsIgnoreCase("O")) {
-            cpuMark = Mark.O;
-        } else {
-            cpuMark = Mark.X;
-        }
+    private Socket socket;
+    private BufferedInputStream input;
+    private BufferedOutputStream output;
+    private BufferedReader console;
+    private Board board;
+    private int player; // 4 for X, 2 for O
 
-        // Initialize board and AI
+    public Client(String serverAddress, int port) throws IOException {
+        socket = new Socket(serverAddress, port);
+        input = new BufferedInputStream(socket.getInputStream());
+        output = new BufferedOutputStream(socket.getOutputStream());
+        console = new BufferedReader(new InputStreamReader(System.in));
         board = new Board();
+    }
 
-        // Set max depth based on system capabilities
-        int maxDepth = Runtime.getRuntime().availableProcessors() > 1 ? 8 : 6;
-        miniMax = new MiniMax(cpuMark, maxDepth);
-
-        // Server connection details
-        String serverAddress = "localhost";
-        if (args.length > 1) {
-            serverAddress = args[1];
-        }
-
+    public void play() {
         try {
-            Socket socket = new Socket(serverAddress, 8888);
-            BufferedInputStream input = new BufferedInputStream(socket.getInputStream());
-            BufferedOutputStream output = new BufferedOutputStream(socket.getOutputStream());
-
             while (true) {
-                char cmd = (char)input.read();
+                char cmd = (char) input.read();
+                System.out.println("Received command: " + cmd);
 
-                // Start game as player X (first)
                 if (cmd == '1') {
-                    byte[] buffer = new byte[1024];
+                    // Playing as X
+                    player = PLAYER_X;
+                    handleStartGame();
+
+                    // X plays first, so make a move
+                    makeAIMove();
+                } else if (cmd == '2') {
+                    // Playing as O
+                    player = PLAYER_O;
+                    handleStartGame();
+                    System.out.println("Waiting for X's move...");
+                } else if (cmd == '3') {
+                    // Server is asking for the next move
+                    byte[] aBuffer = new byte[16];
                     int size = input.available();
-                    input.read(buffer, 0, size);
-                    String boardState = new String(buffer).trim();
+                    System.out.println("Size: " + size);
+                    input.read(aBuffer, 0, size);
 
-                    // Update board from server state
-                    updateBoardFromString(boardState);
+                    String lastMoveStr = new String(aBuffer).trim();
+                    System.out.println("Last move: " + lastMoveStr);
 
-                    // Get AI move
-                    Move move = miniMax.findBestMove(board);
-                    String moveStr = moveToString(move);
-
-                    // Send move to server
-                    output.write(moveStr.getBytes(), 0, moveStr.length());
-                    output.flush();
-                }
-
-                // Start game as player O (second)
-                else if (cmd == '2') {
-                    byte[] buffer = new byte[1024];
-                    int size = input.available();
-                    input.read(buffer, 0, size);
-                    String boardState = new String(buffer).trim();
-
-                    // Update board
-                    updateBoardFromString(boardState);
-                }
-
-                // Server requests next move
-                else if (cmd == '3') {
-                    byte[] buffer = new byte[16];
-                    int size = input.available();
-                    input.read(buffer, 0, size);
-                    String opponentMove = new String(buffer).trim();
-
-                    // Apply opponent's move
-                    if (!opponentMove.equals("A0")) {
-                        applyOpponentMove(opponentMove);
+                    // Update the board with the opponent's move
+                    Move lastMove = MoveGenerator.parseMove(lastMoveStr);
+                    if (lastMove != null && !lastMoveStr.equals("A0")) {
+                        int opponent = (player == PLAYER_X) ? PLAYER_O : PLAYER_X;
+                        board.makeMove(lastMove.getRow(), lastMove.getCol(), opponent);
+                        System.out.println("Updated board with opponent's move: " + lastMoveStr);
+                        board.printBoard();
                     }
 
-                    // Calculate our move
-                    Move move = miniMax.findBestMove(board);
-                    String moveStr = moveToString(move);
-
-                    // Apply our move to our board
-                    board.play(move, cpuMark);
-
-                    // Send move to server
-                    output.write(moveStr.getBytes(), 0, moveStr.length());
-                    output.flush();
-                }
-
-                // Invalid move
-                else if (cmd == '4') {
-                    // Get a new move
-                    Move move = miniMax.findBestMove(board);
-                    String moveStr = moveToString(move);
-
-                    // Apply new move to our board
-                    board.play(move, cpuMark);
-
-                    // Send move to server
-                    output.write(moveStr.getBytes(), 0, moveStr.length());
-                    output.flush();
-                }
-
-                // Game over
-                else if (cmd == '5') {
-                    byte[] buffer = new byte[16];
+                    // Make our move
+                    makeAIMove();
+                } else if (cmd == '4') {
+                    // Invalid move, try again
+                    System.out.println("Invalid move! Trying again...");
+                    makeAIMove();
+                } else if (cmd == '5') {
+                    // Game over
+                    byte[] aBuffer = new byte[16];
                     int size = input.available();
-                    input.read(buffer, 0, size);
+                    input.read(aBuffer, 0, size);
+                    String lastMoveStr = new String(aBuffer).trim();
+                    System.out.println("Game over. Last move: " + lastMoveStr);
 
-                    // Reset for next game
-                    board = new Board();
-
-                    // Send ready signal
+                    // Just send a newline to acknowledge
                     output.write("\n".getBytes(), 0, 1);
                     output.flush();
+                    break;
+                } else {
+                    System.out.println("Unknown command: " + cmd);
                 }
             }
         } catch (IOException e) {
             System.out.println("Error: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
-    // Convert server notation (e.g., "A1") to a Move object
-    private static Move stringToMove(String moveStr) {
-        if (moveStr.length() >= 2) {
-            char colChar = moveStr.charAt(0);
-            char rowChar = moveStr.charAt(1);
+    private void handleStartGame() throws IOException {
+        byte[] aBuffer = new byte[1024];
+        int size = input.available();
+        System.out.println("Size: " + size);
+        input.read(aBuffer, 0, size);
 
-            // Determine the global and local indices
-            // This would need to be modified based on your exact server protocol
-            int globalRow = (rowChar - '1') / 3;
-            int globalCol = (colChar - 'A') / 3;
-            int globalIndex = globalRow * 3 + globalCol;
+        String boardString = new String(aBuffer).trim();
+        System.out.println("Board: " + boardString);
 
-            int localRow = (rowChar - '1') % 3;
-            int localCol = (colChar - 'A') % 3;
-            int localIndex = localRow * 3 + localCol;
-
-            return new Move(globalIndex, localIndex);
-        }
-        return null;
-    }
-
-    // Convert a Move object to server notation (e.g., "A1")
-    private static String moveToString(Move move) {
-        if (move == null) {
-            return "A1"; // Default move
+        // Initialize the board
+        String[] boardValues = boardString.split(" ");
+        int[] boardInts = new int[boardValues.length];
+        for (int i = 0; i < boardValues.length; i++) {
+            boardInts[i] = Integer.parseInt(boardValues[i]);
         }
 
-        int globalIndex = move.getGlobalIndex();
-        int localIndex = move.getLocalIndex();
+        board.initializeBoard(boardInts);
 
-        // Determine the global position
-        int globalRow = globalIndex / 3;
-        int globalCol = globalIndex % 3;
-
-        // Determine the local position
-        int localRow = localIndex / 3;
-        int localCol = localIndex % 3;
-
-        // Calculate the absolute row and column
-        int row = globalRow * 3 + localRow;
-        int col = globalCol * 3 + localCol;
-
-        // Convert to server notation
-        char colChar = (char)('A' + col);
-        char rowChar = (char)('1' + row);
-
-        return String.valueOf(colChar) + rowChar;
+        System.out.println("New game started! You are playing " + (player == PLAYER_X ? "X" : "O"));
+        board.printBoard();
     }
 
-    // Apply opponent's move to our board
-    private static void applyOpponentMove(String moveStr) {
-        Move move = stringToMove(moveStr);
-        Mark opponentMark = (cpuMark == Mark.X) ? Mark.O : Mark.X;
-        board.play(move, opponentMark);
+    private void makeAIMove() throws IOException {
+        System.out.println("AI thinking...");
+        long startTime = System.currentTimeMillis();
+
+        // Find the best move
+        Move bestMove = MinimaxAlphaBeta.findBestMove(board, player, TIME_LIMIT_MILLIS);
+
+        if (bestMove != null) {
+            // Convert the move to a string
+            String moveStr = MoveGenerator.formatMove(bestMove);
+            System.out.println("AI's move: " + moveStr);
+
+            // Make the move on our board
+            board.makeMove(bestMove.getRow(), bestMove.getCol(), player);
+            board.printBoard();
+
+            // Send the move to the server
+            output.write(moveStr.getBytes(), 0, moveStr.length());
+            output.flush();
+
+            long endTime = System.currentTimeMillis();
+            System.out.println("Time taken: " + (endTime - startTime) + " ms");
+        } else {
+            System.out.println("No valid moves found!");
+        }
     }
 
-    // Update board state from server string
-    private static void updateBoardFromString(String boardStr) {
-        // This would need to be implemented based on your server protocol
-        // For example, parsing a string representation of the board state
+    public static void main(String[] args) {
+        String serverAddress = "localhost";
+        int port = 8888;
 
-        // Reset the board
-        board = new Board();
+        // Parse command-line arguments
+        if (args.length > 0) {
+            serverAddress = args[0];
+        }
 
-        // Example implementation (modify based on actual protocol):
-        String[] values = boardStr.split(" ");
-        if (values.length < 81) return; // Not enough values
-
-        for (int i = 0; i < 9; i++) {
-            for (int j = 0; j < 9; j++) {
-                int index = i * 9 + j;
-                int globalIndex = (i / 3) * 3 + (j / 3);
-                int localIndex = (i % 3) * 3 + (j % 3);
-
-                int value = Integer.parseInt(values[index]);
-                if (value == 4) { // X
-                    board.getLocalBoards()[globalIndex][localIndex] = Mark.X;
-                } else if (value == 2) { // O
-                    board.getLocalBoards()[globalIndex][localIndex] = Mark.O;
-                }
+        if (args.length > 1) {
+            try {
+                port = Integer.parseInt(args[1]);
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid port number. Using default: 8888");
             }
         }
 
-        // Update global board status for all local boards
-        for (int i = 0; i < 9; i++) {
-            Mark localWinner = board.checkLocalBoardWinner(i);
-            if (localWinner != Mark.EMPTY) {
-                board.getGlobalBoard()[i] = localWinner;
-            } else if (board.isLocalBoardFull(i)) {
-                board.getGlobalBoard()[i] = Mark.DRAW;
-            }
+        try {
+            Client client = new Client(serverAddress, port);
+            System.out.println("Starting game with AI player");
+            client.play();
+        } catch (IOException e) {
+            System.out.println("Error connecting to server: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }
