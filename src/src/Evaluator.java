@@ -8,7 +8,7 @@ public class Evaluator {
     private static final int POTENTIAL_WIN_SCORE = 1000;
     private static final int TWO_IN_A_ROW_SCORE = 100;
     private static final int STRATEGIC_LOCAL_BOARD_SCORE = 500;
-    private static final int CENTER_SCORE = 5;
+    private static final int CENTER_SCORE = 25;
 
     // Poids des positions pour plateaux locaux
     private static final int[][] POSITION_WEIGHTS = {
