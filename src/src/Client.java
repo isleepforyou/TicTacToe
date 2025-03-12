@@ -49,33 +49,28 @@ public class Client {
 
                 switch (cmd) {
                     case CMD_PLAY_AS_X:
-                        // Joue en tant que X (premier joueur)
                         player = PLAYER_X;
                         handleStartGame();
                         makeAIMove(); // X joue en premier
                         break;
 
                     case CMD_PLAY_AS_O:
-                        // Joue en tant que O (second joueur)
                         player = PLAYER_O;
                         handleStartGame();
                         System.out.println("Waiting for X's move...");
                         break;
 
                     case CMD_REQUEST_MOVE:
-                        // Serveur demande le prochain coup
                         handleOpponentMove();
                         makeAIMove();
                         break;
 
                     case CMD_INVALID_MOVE:
-                        // Coup invalide
                         System.out.println("Invalid move! Trying again...");
                         makeAIMove();
                         break;
 
                     case CMD_GAME_OVER:
-                        // Fin de partie
                         handleGameOver();
                         return; // Quitte la boucle et termine le programme
 

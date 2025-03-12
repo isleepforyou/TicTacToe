@@ -26,10 +26,9 @@ javac *.java
 ## Exécution
 
 ```bash
-java Client [adresse_serveur] [port]
+java Client
 ```
-
-Par défaut:
+se connecte par défault à :
 - Adresse: localhost
 - Port: 8888
 

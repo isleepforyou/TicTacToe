@@ -30,10 +30,10 @@ public class MinimaxAlphaBeta {
 
             try {
                 Move move = findBestMoveAtDepth(board, player, depth);
-                bestMove = move; // Mise à jour du meilleur coup trouvé
+                bestMove = move;
                 maxDepthReached = depth;
             } catch (TimeoutException e) {
-                break; // Arrête l'approfondissement si le temps est écoulé
+                break;
             }
         }
 
@@ -52,7 +52,7 @@ public class MinimaxAlphaBeta {
         int beta = Integer.MAX_VALUE;
 
         for (Move move : possibleMoves) {
-            // Vérifie si la limite de temps est atteinte
+
             checkTimeLimit();
 
             // Crée une copie du plateau et joue le coup
@@ -79,7 +79,7 @@ public class MinimaxAlphaBeta {
      * Algorithme minimax avec élagage alpha-beta
      */
     private static int minimax(Board board, int depth, int alpha, int beta, boolean isMaximizing, int player) throws TimeoutException {
-        // Vérifie la limite de temps périodiquement (toutes les 1000 opérations par exemple)
+
         if (depth % 3 == 0) {
             checkTimeLimit();
         }

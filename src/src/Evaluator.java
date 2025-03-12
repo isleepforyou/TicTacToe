@@ -1,6 +1,5 @@
 /**
  * Évaluateur pour jeu Ultimate Tic-Tac-Toe
- * Version refactorisée pour éliminer le code redondant
  */
 public class Evaluator {
     // Constantes pour l'évaluation
@@ -71,8 +70,7 @@ public class Evaluator {
                 } else if (localBoardStatus[localBoard] == opponent) {
                     score -= STRATEGIC_LOCAL_BOARD_SCORE * boardWeight;
                     opponentLocalWins++;
-                } else if (localBoardStatus[localBoard] == 0) {
-                    // Évalue un plateau local ouvert
+                } else if (localBoardStatus[localBoard] == 0) { // Évalue la position si le plateau n'est pas fermé
                     score += evaluateLocalBoard(boardState, startRow, startCol, player, opponent, boardWeight);
                 }
             }
@@ -81,7 +79,7 @@ public class Evaluator {
         // Évalue les motifs globaux
         score += evaluateGlobalPatterns(localBoardStatus, player, opponent);
 
-        // Évalue les coups forcés
+        // Évalue les coups forcés (vers ou est envoyé l'adversaire)
         int nextLocalBoard = board.getNextLocalBoard();
         if (nextLocalBoard != -1) {
             int nextRow = nextLocalBoard / 3;

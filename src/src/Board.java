@@ -11,12 +11,14 @@ public class Board {
     // État des plateaux locaux: 0 (ouvert), 4 (X gagne), 2 (O gagne), 1 (nul)
     private int[] localBoardStatus;
 
+    // Nouveau match
     public Board() {
         board = new int[9][9];
         localBoardStatus = new int[9];
         nextLocalBoard = -1;
     }
 
+    // Début d'une certaine position
     public Board(int[][] board, int nextLocalBoard) {
         this.board = new int[9][9];
         for (int i = 0; i < 9; i++) {
@@ -60,7 +62,6 @@ public class Board {
         updateLocalBoardStatuses();
     }
 
-    // Joue un coup
     public boolean makeMove(int globalRow, int globalCol, int player) {
         // Check if the move is valid
         if (!isValidMove(globalRow, globalCol)) {
