@@ -215,7 +215,6 @@ public class MinimaxAlphaBeta {
 
     /**
      * Algorithme minimax avec élagage alpha-beta
-     * Version inchangée de l'original pour préserver le comportement
      */
     private static int minimax(Board board, int depth, int alpha, int beta, boolean isMaximizing, int player)
             throws TimeoutException {
