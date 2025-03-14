@@ -2,7 +2,8 @@ import java.io.*;
 import java.net.*;
 
 /**
- * Client pour jeu Ultimate Tic-Tac-Toe
+ * Client for jeu Ultimate Tic-Tac-Toe
+ * Enhanced with improved minimax search algorithm
  */
 public class Client {
     // Constantes du jeu
@@ -148,6 +149,9 @@ public class Client {
         // Envoi d'un retour à la ligne pour accuser réception
         output.write("\n".getBytes(), 0, 1);
         output.flush();
+
+        // Clean up AI resources
+        MinimaxAlphaBeta.shutdown();
     }
 
     /**
@@ -157,7 +161,7 @@ public class Client {
         System.out.println("AI thinking...");
         long startTime = System.currentTimeMillis();
 
-        // Trouve le meilleur coup
+        // Trouve le meilleur coup avec l'algorithme amélioré
         Move bestMove = MinimaxAlphaBeta.findBestMove(board, player, TIME_LIMIT_MILLIS);
 
         if (bestMove != null) {
@@ -175,6 +179,14 @@ public class Client {
 
             long endTime = System.currentTimeMillis();
             System.out.println("Time taken: " + (endTime - startTime) + " ms");
+
+            // Affiche l'état du jeu
+            int gameStatus = board.checkGameStatus();
+            if (gameStatus == player) {
+                System.out.println("*** AI WINS! ***");
+            } else if (gameStatus == 1) {
+                System.out.println("*** GAME DRAWN ***");
+            }
         } else {
             System.out.println("No valid moves found!");
         }
@@ -189,6 +201,9 @@ public class Client {
             if (output != null) output.close();
             if (input != null) input.close();
             if (socket != null) socket.close();
+
+            // Shutdown the parallel searcher
+            MinimaxAlphaBeta.shutdown();
         } catch (IOException e) {
             System.out.println("Error closing resources: " + e.getMessage());
         }
@@ -216,7 +231,7 @@ public class Client {
 
         try {
             Client client = new Client(serverAddress, port);
-            System.out.println("Starting game with AI player");
+            System.out.println("Starting game with enhanced AI player");
             client.play();
         } catch (IOException e) {
             System.out.println("Error connecting to server: " + e.getMessage());
