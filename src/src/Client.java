@@ -1,8 +1,10 @@
 import java.io.*;
 import java.net.*;
+import javax.swing.JOptionPane;
 
 /**
  * Client pour jeu Ultimate Tic-Tac-Toe
+ * Gère la communication avec le serveur et l'exécution de l'IA
  */
 public class Client {
     private static final int PLAYER_X = 4;
@@ -16,17 +18,32 @@ public class Client {
     private Board board;
     private int player; // 4 pour X, 2 pour O
 
+    /**
+     * Établit une connexion avec le serveur de jeu
+     *
+     * @param serverAddress Adresse IP ou nom d'hôte du serveur
+     * @param port Port du serveur
+     * @throws IOException En cas d'erreur de connexion
+     */
     public Client(String serverAddress, int port) throws IOException {
+        // Initialise la connexion réseau
         socket = new Socket(serverAddress, port);
         input = new BufferedInputStream(socket.getInputStream());
         output = new BufferedOutputStream(socket.getOutputStream());
         console = new BufferedReader(new InputStreamReader(System.in));
+
+        // Initialise le plateau de jeu
         board = new Board();
     }
 
+    /**
+     * Boucle principale de jeu.
+     * Traite les commandes reçues du serveur et y répond.
+     */
     public void play() {
         try {
             while (true) {
+                // Lit la commande envoyée par le serveur
                 char cmd = (char) input.read();
                 System.out.println("Received command: " + cmd);
 
@@ -111,6 +128,12 @@ public class Client {
         board.printBoard();
     }
 
+    /**
+     * Calcule et envoie le prochain coup de l'IA au serveur
+     * Utilise l'algorithme Minimax avec élagage alpha-beta
+     *
+     * @throws IOException En cas d'erreur de communication avec le serveur
+     */
     private void makeAIMove() throws IOException {
         System.out.println("AI thinking...");
         long startTime = System.currentTimeMillis();
@@ -139,29 +162,30 @@ public class Client {
     }
 
     public static void main(String[] args) {
-        String serverAddress = "localhost";
-        int port = 8888;
-
-        // Analyse des arguments
-        if (args.length > 0) {
-            serverAddress = args[0];
-        }
-
-        if (args.length > 1) {
-            try {
-                port = Integer.parseInt(args[1]);
-            } catch (NumberFormatException e) {
-                System.out.println("Invalid port number. Using default: 8888");
-            }
-        }
-
         try {
+            // Obtient la configuration du serveur (via arguments ou boîtes de dialogue)
+            ServerConfig config = new ServerConfig(args);
+            String serverAddress = config.getServerAddress();
+            int port = config.getPort();
+
+            // Tente de se connecter au serveur avec les paramètres spécifiés
+            System.out.println("Connecting to server at " + serverAddress + ":" + port);
             Client client = new Client(serverAddress, port);
+
+            // Démarre la partie si la connexion est établie
             System.out.println("Starting game with AI player");
             client.play();
         } catch (IOException e) {
             System.out.println("Error connecting to server: " + e.getMessage());
             e.printStackTrace();
+
+            // Affiche une boîte de dialogue en cas d'erreur de connexion
+            JOptionPane.showMessageDialog(
+                    null,
+                    "Failed to connect to server: " + e.getMessage(),
+                    "Connection Error",
+                    JOptionPane.ERROR_MESSAGE
+            );
         }
     }
 }

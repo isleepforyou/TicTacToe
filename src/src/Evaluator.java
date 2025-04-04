@@ -91,7 +91,7 @@ public class Evaluator {
 
             // Si prochain plateau est déjà gagné, c'est mauvais
             if (localBoardStatus[nextLocalBoard] != 0) {
-                score -= 200;
+                score -= 300;
             }
             // Si le prochain plateau est stratégique mais pas gagné, c'est désavantageux
             else if (nextBoardWeight > 1) {
