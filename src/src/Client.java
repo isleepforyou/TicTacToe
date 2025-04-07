@@ -19,9 +19,14 @@ public class Client {
     private Board board;
     private int player; // 4 pour X, 2 pour O
 
+    // État du client
+    private boolean inStandbyMode = false;
+    private boolean gameInProgress = false;
+
     // Statistiques de jeu simples
     private int validMovesReceived = 0;
     private int invalidMovesReceived = 0;
+    private int gamesPlayed = 0;
 
     /**
      * Établit une connexion avec le serveur de jeu
@@ -58,6 +63,10 @@ public class Client {
                     handleStartGame();
                     System.out.println("Playing as X (first player)");
 
+                    // Quitter le standby mode si nécessaire
+                    inStandbyMode = false;
+                    gameInProgress = true;
+
                     // X joue en premier
                     makeAIMove();
                 } else if (cmd == '2') {
@@ -66,6 +75,10 @@ public class Client {
                     handleStartGame();
                     System.out.println("Playing as O (second player)");
                     System.out.println("Waiting for X's move...");
+
+                    // Quitter le standby mode si nécessaire
+                    inStandbyMode = false;
+                    gameInProgress = true;
                 } else if (cmd == '3') {
                     // Serveur demande le prochain coup
                     byte[] aBuffer = new byte[16];
@@ -76,15 +89,26 @@ public class Client {
                     String lastMoveStr = new String(aBuffer).trim();
                     System.out.println("Received opponent move: " + lastMoveStr);
 
-                    // Met à jour le plateau avec le coup adverse
-                    processOpponentMove(lastMoveStr);
+                    if (!inStandbyMode && gameInProgress) {
+                        // Met à jour le plateau avec le coup adverse
+                        processOpponentMove(lastMoveStr);
 
-                    // Joue notre coup
-                    makeAIMove();
+                        // Joue notre coup
+                        makeAIMove();
+                    } else {
+                        System.out.println("In standby mode - not responding to move request");
+                        // Envoie un coup spécial pour signaler qu'on est en standby
+                        sendStandbyResponse();
+                    }
                 } else if (cmd == '4') {
                     // Coup invalide
                     System.out.println("Server rejected our move as invalid! Trying again...");
-                    makeAIMove();
+                    if (!inStandbyMode && gameInProgress) {
+                        makeAIMove();
+                    } else {
+                        System.out.println("In standby mode - not retrying move");
+                        sendStandbyResponse();
+                    }
                 } else if (cmd == '5') {
                     // Fin de partie
                     byte[] aBuffer = new byte[16];
@@ -98,10 +122,18 @@ public class Client {
                     System.out.println("- Valid opponent moves: " + validMovesReceived);
                     System.out.println("- Invalid opponent moves: " + invalidMovesReceived);
 
+                    // Passer en mode standby au lieu de fermer la connexion
+                    inStandbyMode = true;
+                    gameInProgress = false;
+                    gamesPlayed++;
+                    System.out.println("Entering standby mode. Total games played: " + gamesPlayed);
+                    System.out.println("Waiting for a new game to start...");
+
                     // Envoi d'un retour à la ligne pour accuser réception
                     output.write("\n".getBytes(), 0, 1);
                     output.flush();
-                    break;
+
+                    // Ne pas faire de break ici pour maintenir la connexion active
                 } else {
                     System.out.println("Unknown command received: " + cmd);
                 }
@@ -110,6 +142,16 @@ public class Client {
             System.out.println("Communication error: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    /**
+     * Envoie une réponse spéciale quand on est en mode standby
+     */
+    private void sendStandbyResponse() throws IOException {
+        String standbyResponse = "A0";
+        System.out.println("Sending standby response: " + standbyResponse);
+        output.write(standbyResponse.getBytes(), 0, standbyResponse.length());
+        output.flush();
     }
 
     /**
