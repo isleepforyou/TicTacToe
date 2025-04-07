@@ -1,5 +1,6 @@
 import java.io.*;
 import java.net.*;
+import java.util.List;
 import javax.swing.JOptionPane;
 
 /**
@@ -17,6 +18,10 @@ public class Client {
     private BufferedReader console;
     private Board board;
     private int player; // 4 pour X, 2 pour O
+
+    // Statistiques de jeu simples
+    private int validMovesReceived = 0;
+    private int invalidMovesReceived = 0;
 
     /**
      * Établit une connexion avec le serveur de jeu
@@ -51,6 +56,7 @@ public class Client {
                     // Joue en tant que X
                     player = PLAYER_X;
                     handleStartGame();
+                    System.out.println("Playing as X (first player)");
 
                     // X joue en premier
                     makeAIMove();
@@ -58,31 +64,26 @@ public class Client {
                     // Joue en tant que O
                     player = PLAYER_O;
                     handleStartGame();
+                    System.out.println("Playing as O (second player)");
                     System.out.println("Waiting for X's move...");
                 } else if (cmd == '3') {
                     // Serveur demande le prochain coup
                     byte[] aBuffer = new byte[16];
                     int size = input.available();
-                    System.out.println("Size: " + size);
+                    System.out.println("Available bytes: " + size);
                     input.read(aBuffer, 0, size);
 
                     String lastMoveStr = new String(aBuffer).trim();
-                    System.out.println("Last move: " + lastMoveStr);
+                    System.out.println("Received opponent move: " + lastMoveStr);
 
                     // Met à jour le plateau avec le coup adverse
-                    Move lastMove = MoveGenerator.parseMove(lastMoveStr);
-                    if (lastMove != null && !lastMoveStr.equals("A0")) {
-                        int opponent = (player == PLAYER_X) ? PLAYER_O : PLAYER_X;
-                        board.makeMove(lastMove.getRow(), lastMove.getCol(), opponent);
-                        System.out.println("Updated board with opponent's move: " + lastMoveStr);
-                        board.printBoard();
-                    }
+                    processOpponentMove(lastMoveStr);
 
                     // Joue notre coup
                     makeAIMove();
                 } else if (cmd == '4') {
                     // Coup invalide
-                    System.out.println("Invalid move! Trying again...");
+                    System.out.println("Server rejected our move as invalid! Trying again...");
                     makeAIMove();
                 } else if (cmd == '5') {
                     // Fin de partie
@@ -92,18 +93,88 @@ public class Client {
                     String lastMoveStr = new String(aBuffer).trim();
                     System.out.println("Game over. Last move: " + lastMoveStr);
 
+                    // Affiche les statistiques de validation
+                    System.out.println("Game statistics:");
+                    System.out.println("- Valid opponent moves: " + validMovesReceived);
+                    System.out.println("- Invalid opponent moves: " + invalidMovesReceived);
+
                     // Envoi d'un retour à la ligne pour accuser réception
                     output.write("\n".getBytes(), 0, 1);
                     output.flush();
                     break;
                 } else {
-                    System.out.println("Unknown command: " + cmd);
+                    System.out.println("Unknown command received: " + cmd);
                 }
             }
         } catch (IOException e) {
-            System.out.println("Error: " + e.getMessage());
+            System.out.println("Communication error: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    /**
+     * Traite et valide un coup reçu de l'adversaire
+     *
+     * @param moveStr La chaîne représentant le coup (ex: "D6")
+     * @return true si le coup a été accepté et appliqué, false sinon
+     */
+    private boolean processOpponentMove(String moveStr) {
+        // Cas spécial : "A0" est une notation spéciale (à ignorer)
+        if (moveStr.equals("A0")) {
+            System.out.println("Special move A0 received (ignored)");
+            return true;
+        }
+
+        // Valide le format du coup
+        if (!isValidMoveFormat(moveStr)) {
+            System.out.println("Warning: Received invalid move format: " + moveStr);
+            invalidMovesReceived++;
+            return false;
+        }
+
+        // Parser le coup
+        Move move = MoveGenerator.parseMove(moveStr);
+        if (move == null) {
+            System.out.println("Warning: Failed to parse move: " + moveStr);
+            invalidMovesReceived++;
+            return false;
+        }
+
+        // Vérifie si le coup est valide selon les règles du jeu
+        if (!board.isValidMove(move.getRow(), move.getCol())) {
+            System.out.println("Warning: Received illegal move: " + moveStr);
+            invalidMovesReceived++;
+            return false;
+        }
+
+        // Applique le coup
+        int opponent = (player == PLAYER_X) ? PLAYER_O : PLAYER_X;
+        boolean success = board.makeMove(move.getRow(), move.getCol(), opponent);
+        if (success) {
+            validMovesReceived++;
+            System.out.println("Opponent's move accepted: " + moveStr);
+            board.printBoard();
+            return true;
+        } else {
+            // Ca ne devrait pas arriver
+            System.out.println("Error: Move validation inconsistency for: " + moveStr);
+            invalidMovesReceived++;
+            return false;
+        }
+    }
+
+    /**
+     * Vérifie le format d'une chaîne représentant un coup
+     * @param moveStr Chaîne à valider (ex: "D6")
+     * @return true si le format est valide, false sinon
+     */
+    private boolean isValidMoveFormat(String moveStr) {
+        if (moveStr == null || moveStr.isEmpty()) {
+            return false;
+        }
+
+        // Format valide: une lettre A-I suivie d'un chiffre 1-9
+        return moveStr.matches("^[A-Ia-i][1-9]$");
     }
 
     private void handleStartGame() throws IOException {
@@ -116,16 +187,23 @@ public class Client {
         System.out.println("Board: " + boardString);
 
         // Initialise le plateau
-        String[] boardValues = boardString.split(" ");
-        int[] boardInts = new int[boardValues.length];
-        for (int i = 0; i < boardValues.length; i++) {
-            boardInts[i] = Integer.parseInt(boardValues[i]);
+        try {
+            String[] boardValues = boardString.split(" ");
+            int[] boardInts = new int[boardValues.length];
+            for (int i = 0; i < boardValues.length; i++) {
+                boardInts[i] = Integer.parseInt(boardValues[i]);
+            }
+
+            board.initializeBoard(boardInts);
+            System.out.println("New game started! You are playing " + (player == PLAYER_X ? "X" : "O"));
+            board.printBoard();
+
+            // Réinitialise les statistiques
+            validMovesReceived = 0;
+            invalidMovesReceived = 0;
+        } catch (NumberFormatException e) {
+            System.out.println("Failed to parse board data: " + e.getMessage());
         }
-
-        board.initializeBoard(boardInts);
-
-        System.out.println("New game started! You are playing " + (player == PLAYER_X ? "X" : "O"));
-        board.printBoard();
     }
 
     /**
@@ -138,27 +216,82 @@ public class Client {
         System.out.println("AI thinking...");
         long startTime = System.currentTimeMillis();
 
-        // Trouve le meilleur coup
-        Move bestMove = MinimaxAlphaBeta.findBestMove(board, player, TIME_LIMIT_MILLIS);
+        try {
+            // Trouve le meilleur coup
+            Move bestMove = MinimaxAlphaBeta.findBestMove(board, player, TIME_LIMIT_MILLIS);
 
-        if (bestMove != null) {
-            // Convertit le coup en chaîne
-            String moveStr = MoveGenerator.formatMove(bestMove);
-            System.out.println("AI's move: " + moveStr);
+            if (bestMove != null) {
+                // Vérifie que le coup est valide
+                if (!board.isValidMove(bestMove.getRow(), bestMove.getCol())) {
+                    System.out.println("Warning: AI generated an invalid move! Finding alternative...");
+                    bestMove = findRandomValidMove();
+                }
 
-            // Joue le coup sur notre plateau
-            board.makeMove(bestMove.getRow(), bestMove.getCol(), player);
-            board.printBoard();
+                if (bestMove != null) {
+                    // Convertit le coup en chaîne
+                    String moveStr = MoveGenerator.formatMove(bestMove);
+                    System.out.println("AI's move: " + moveStr);
 
-            // Envoie le coup au serveur
+                    // Joue le coup sur notre plateau
+                    board.makeMove(bestMove.getRow(), bestMove.getCol(), player);
+                    board.printBoard();
+
+                    // Envoie le coup au serveur
+                    output.write(moveStr.getBytes(), 0, moveStr.length());
+                    output.flush();
+
+                    long endTime = System.currentTimeMillis();
+                    System.out.println("Time taken: " + (endTime - startTime) + " ms");
+                } else {
+                    handleNoValidMoves();
+                }
+            } else {
+                handleNoValidMoves();
+            }
+        } catch (Exception e) {
+            System.out.println("AI error: " + e.getMessage());
+            e.printStackTrace();
+            handleNoValidMoves();
+        }
+    }
+
+    /**
+     * Gère le cas où aucun coup valide n'est trouvé
+     */
+    private void handleNoValidMoves() throws IOException {
+        System.out.println("No valid moves found!");
+
+        // Recherche d'un coup de secours
+        Move fallbackMove = findRandomValidMove();
+
+        if (fallbackMove != null) {
+            String moveStr = MoveGenerator.formatMove(fallbackMove);
+            System.out.println("Using fallback move: " + moveStr);
+
+            // Applique et envoie le coup
+            board.makeMove(fallbackMove.getRow(), fallbackMove.getCol(), player);
             output.write(moveStr.getBytes(), 0, moveStr.length());
             output.flush();
-
-            long endTime = System.currentTimeMillis();
-            System.out.println("Time taken: " + (endTime - startTime) + " ms");
         } else {
-            System.out.println("No valid moves found!");
+            // Vraiment aucun coup possible, envoie code spécial
+            String defaultResponse = "A0";
+            System.out.println("No valid moves possible. Sending special code: " + defaultResponse);
+            output.write(defaultResponse.getBytes(), 0, defaultResponse.length());
+            output.flush();
         }
+    }
+
+    /**
+     * Trouve un coup valide aléatoire (pour les cas d'urgence)
+     */
+    private Move findRandomValidMove() {
+        List<Move> validMoves = MoveGenerator.generateMoves(board);
+        if (validMoves.isEmpty()) {
+            return null;
+        }
+
+        // Prend simplement le premier coup valide
+        return validMoves.get(0);
     }
 
     public static void main(String[] args) {
